@@ -1,0 +1,29 @@
+# secrets: never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+client.properties
+
+# node
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# python (backend, built in the window)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.sqlite3
+*.db
+
+# tooling
+.taste-skill/
+.DS_Store
+Thumbs.db
