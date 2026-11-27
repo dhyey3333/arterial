@@ -26,15 +26,70 @@ live infrastructure.
 | Architecture, API and event contracts (`docs/`) | Written, and corrected with what Condense showed | Before the window, updated in it |
 | Road networks (`simulator/osm_extract.py`, `network.py`) | All of India (expressways, national and state highways: 203,886 segments, 368,587 km) and Bengaluru in street detail (5,933 segments), from the Geofabrik India extract | Build window |
 | Telemetry simulator (`simulator/sim.py`) | Running: seeded vehicles on the real road network, a time-of-day demand model, build-up and incident scenarios started on demand | Build window |
-| Condense pipeline (`pipeline/`) | Running on Condense as three transforms of the application `arterial`, built from this repository's `Dockerfile`: validate-telemetry, segment-window, congestion-forecast | Build window |
+| Condense pipeline (`pipeline/`) | Running on Condense as four transforms of the application `arterial`, built from this repository's `Dockerfile`: validate-telemetry, segment-window, congestion-forecast, alert-router | Build window |
 | API (`api/`) | Running: REST, Server-Sent Events, routes (A*), place search, the landing's corridor view, scenario control; state rebuilt from Kafka on start, no database yet | Build window |
 | Forecast | Rule baseline running on Condense, its accuracy measured live against persistence; no trained model yet | Build window |
-| Alerts and incident detection | Not started | Build window |
+| Alerts | Running on Condense (alert-router): emerging, escalated, sustained, cleared | Build window |
+| Incident detection | Not started; the `incidents` topic stays empty | Build window |
 
 **End to end, demonstrated on 28 Nov 2026:** simulated telemetry goes to the team's Kafka topics on
-Condense, through the three transforms running on Condense, to the API and into the browser, where the
+Condense, through the transforms running on Condense, to the API and into the browser, where the
 console shows the whole country live. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) lists what was prepared
 before the window and what was built in it.
+
+## Architecture, as built
+
+```mermaid
+flowchart LR
+  subgraph Laptop["Team laptop"]
+    SIM["Simulator, Python<br/>seeded vehicles on OpenStreetMap roads<br/>India 1,500 · Bengaluru 400"]
+    API["Arterial API, FastAPI<br/>REST + Server-Sent Events<br/>routes, places, corridors"]
+    WEB["Web app, React + MapLibre<br/>landing and console"]
+  end
+  subgraph Kafka["Team Kafka on Condense (SASL SCRAM, prefix codeverse_)"]
+    RAW[("telemetry-raw")]
+    VAL[("telemetry-valid")]
+    REJ[("telemetry-rejected")]
+    MET[("segment-metrics")]
+    PRED[("predictions")]
+    ALR[("congestion-alerts")]
+  end
+  subgraph Condense["Condense pipeline: application 'arterial', built from this repo's Dockerfile"]
+    V["arterial-validate-telemetry"]
+    W["arterial-segment-window<br/>30 s windows per segment"]
+    F["arterial-congestion-forecast<br/>5, 10, 15 min ahead"]
+    A["arterial-alert-router"]
+  end
+  OSM["Geofabrik India extract<br/>OpenStreetMap, ODbL"] -.-> SIM
+  SIM --> RAW --> V
+  V --> VAL
+  V --> REJ
+  VAL --> W --> MET
+  MET --> F --> PRED
+  MET --> A --> ALR
+  VAL & REJ & MET & PRED & ALR --> API
+  API -- "SSE + REST" --> WEB
+  WEB -- "POST /sim/scenario" --> API -. "control file" .-> SIM
+```
+
+The simulator is the only data source: every event is synthetic. The four transforms are one Python
+image deployed four times on Condense, each with `ARTERIAL_STAGE` set to its stage. The API holds no
+state of its own: on start it rebuilds from the last ten minutes of the topics. Design detail, formulas
+and thresholds are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the write-up is in
+[docs/WRITEUP.md](docs/WRITEUP.md).
+
+## Judge access
+
+- **The Condense pipeline**: workspace **Codeverse** in the Configure 2026 Sandbox environment
+  (Azure, southasia). Condense's staff are already members of the workspace, so the pipeline opens at
+  <https://app.condense.io/pipelines> once that workspace is selected. It shows the four transforms
+  above; each one's Logs tab prints what it has read and sent.
+- **The topics**: the team's Kafka dashboard lists the `codeverse_` topics and their messages.
+- **Data flowing**: the transforms run on Condense at all times; events flow while the team's simulator
+  runs, which it does during judging. Anyone can also run it (see Run the backend) with their own
+  Kafka login in `.env`.
+- **No secrets in the repository**: the Kafka login lives only in a git-ignored `.env` and in Condense as
+  a Password variable. Ask the team on Discord for anything else; passwords are never put in the form.
 
 ## Documentation
 
@@ -45,6 +100,7 @@ before the window and what was built in it.
 - [Events](docs/EVENTS.md): Kafka topics and message schemas.
 - [Build plan](docs/BUILD-PLAN.md): the 48 hours, and the demo scenario.
 - [Declarations](docs/COMPLIANCE.md): prepared work, AI tools, third-party code and data.
+- [Write-up](docs/WRITEUP.md): the problem, the solution, how Condense is used, challenges, limitations, next steps.
 
 ## Run the web app
 

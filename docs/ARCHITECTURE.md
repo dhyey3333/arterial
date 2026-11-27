@@ -30,6 +30,12 @@ the expected speed change and an honest error band.
 
 ## 2. System overview
 
+> **As built, 28 Nov 2026.** The running system is drawn in the README (Architecture, as built): the
+> simulator, four transforms on Condense (validate, segment window, forecast, alert router) and the API
+> holding its state in memory. The diagram below is the original plan: Split and Alerts utilities
+> (not in the sandbox Library), an incident detector (not built) and a database (not used).
+
+
 ```mermaid
 flowchart LR
   subgraph Local["Local machine or VM (window)"]
