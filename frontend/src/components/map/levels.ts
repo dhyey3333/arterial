@@ -6,7 +6,7 @@ export const LEVEL_RGB: Record<SegmentLevel, [number, number, number]> = {
   moderate: [250, 178, 25],
   heavy: [236, 131, 90],
   severe: [208, 59, 59],
-  no_data: [74, 85, 102],
+  no_data: [84, 84, 84],
 };
 
 /** Width steps double the colour channel, because warning and serious sit close in hue. */

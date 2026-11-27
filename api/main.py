@@ -30,6 +30,8 @@ REGION = os.environ.get("ARTERIAL_REGION", "in")
 state = State(REGION)
 router = Router(state)
 IST = timezone(timedelta(hours=5, minutes=30))
+# dots sent to the browser each second: fewer for a whole country, where they are specks anyway
+VEHICLE_SAMPLE = 400 if state.region.get("kind") == "national" else 600
 
 app = FastAPI(title="Arterial API", version="1")
 app.add_middleware(GZipMiddleware, minimum_size=2048)
@@ -81,7 +83,7 @@ async def ticker():
     while True:
         await asyncio.sleep(1)
         n += 1
-        hub.publish("vehicles", {"ts": iso(), "vehicles": state.vehicle_sample()})
+        hub.publish("vehicles", {"ts": iso(), "vehicles": state.vehicle_sample(VEHICLE_SAMPLE)})
         if n % 2 == 0:
             pending = state.take_pending()
             if pending:

@@ -103,6 +103,10 @@ function midpoint(geometry: LngLat[]): LngLat {
 }
 
 const emptyFC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+const NO_DATA_COLOR = `rgb(${LEVEL_RGB.no_data.join(',')})`;
+const NO_DATA_W = LEVEL_WIDTH.no_data;
+/** At country zoom only expressways and national highways are drawn; state highways join from zoom 7. */
+const ROAD_FILTER = ['any', ['match', ['get', 'c'], ['motorway', 'trunk'], true, false], ['>=', ['zoom'], 7]] as unknown as maplibregl.FilterSpecification;
 
 /**
  * Padding that keeps the network clear of floating panels, scaled down on a
@@ -124,14 +128,14 @@ function addLayers(map: MLMap, net: RoadNetwork) {
       type: 'FeatureCollection',
       features: net.segments.map((s) => ({
         type: 'Feature',
-        properties: { id: s.id, name: s.name },
+        properties: { id: s.id, name: s.name, c: s.road_class },
         geometry: { type: 'LineString', coordinates: s.geometry },
       })),
     },
   });
   const w = (base: number, top: number) =>
     // thin at country zoom (the national tier), full width from city zoom up
-    ['interpolate', ['linear'], ['zoom'], 4, ['*', ['coalesce', ['feature-state', 'w'], 1], base * 0.22], 11, ['*', ['coalesce', ['feature-state', 'w'], 1], base], 16, ['*', ['coalesce', ['feature-state', 'w'], 1], top]] as unknown as number;
+    ['interpolate', ['linear'], ['zoom'], 4, ['*', ['coalesce', ['feature-state', 'w'], NO_DATA_W], base * 0.22], 11, ['*', ['coalesce', ['feature-state', 'w'], NO_DATA_W], base], 16, ['*', ['coalesce', ['feature-state', 'w'], NO_DATA_W], top]] as unknown as number;
   // road and route lines sit under the basemap's names, the way a traffic map keeps street names readable
   const under = map.getLayer(FIRST_LABEL) ? FIRST_LABEL : undefined;
 
@@ -139,6 +143,7 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     id: 'seg-halo',
     type: 'line',
     source: 'segments',
+    filter: ROAD_FILTER,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': '#eeeff1',
@@ -150,6 +155,7 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     id: 'seg-casing',
     type: 'line',
     source: 'segments',
+    filter: ROAD_FILTER,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-color': '#0b0b0b', 'line-width': w(4.2, 10), 'line-opacity': 0.9 },
   }, under);
@@ -157,17 +163,19 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     id: 'seg-line',
     type: 'line',
     source: 'segments',
+    filter: ROAD_FILTER,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': ['coalesce', ['feature-state', 'color'], '#545454'],
+      'line-color': ['coalesce', ['feature-state', 'color'], NO_DATA_COLOR],
       'line-width': w(2.4, 6.5),
-      'line-opacity': ['coalesce', ['feature-state', 'opacity'], 0.8],
+      'line-opacity': ['coalesce', ['feature-state', 'opacity'], LEVEL_OPACITY.no_data],
     },
   }, under);
   map.addLayer({
     id: 'seg-worse',
     type: 'line',
     source: 'segments',
+    filter: ROAD_FILTER,
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
       'line-color': '#0b0b0b',
@@ -272,6 +280,7 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     id: 'seg-hit',
     type: 'line',
     source: 'segments',
+    filter: ROAD_FILTER,
     paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 16 },
   });
 }
@@ -411,6 +420,8 @@ export function TrafficMap({
   }, [network]);
 
   // ---- segment colours: now or forecast, animated between windows ----
+  /** What each segment looks like right now, so a new target eases from the colour on screen. */
+  const current = useRef(new Map<string, Look>());
   const targets = useMemo(() => {
     const out = new Map<string, { level: SegmentLevel; worse: boolean }>();
     if (!network) return out;
@@ -418,16 +429,18 @@ export function TrafficMap({
     if (mode === 'forecast' && predictions) {
       for (const p of predictions.predictions) if (p.horizon_min === horizon) byHorizon.set(p.segment_id, p.predicted_level);
     }
-    for (const s of network.segments) {
-      const now = states[s.id]?.level ?? 'no_data';
-      const level = mode === 'forecast' ? (byHorizon.get(s.id) ?? 'no_data') : now;
-      out.set(s.id, { level, worse: mode === 'forecast' && LEVEL_RANK[level] > LEVEL_RANK[now] });
+    // Only segments that have data, a forecast, or a colour on screen: a country-sized network is
+    // mostly roads with no report, and those keep the layer's default no-data look.
+    const ids = new Set<string>([...Object.keys(states), ...byHorizon.keys(), ...current.current.keys()]);
+    for (const id of ids) {
+      if (!segIndex[id]) continue;
+      const now = states[id]?.level ?? 'no_data';
+      const level = mode === 'forecast' ? (byHorizon.get(id) ?? 'no_data') : now;
+      out.set(id, { level, worse: mode === 'forecast' && LEVEL_RANK[level] > LEVEL_RANK[now] });
     }
     return out;
-  }, [network, states, predictions, mode, horizon]);
+  }, [network, segIndex, states, predictions, mode, horizon]);
 
-  /** What each segment looks like right now, so a new target eases from the colour on screen. */
-  const current = useRef(new Map<string, Look>());
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
@@ -437,6 +450,7 @@ export function TrafficMap({
     for (const [id, t] of targets) {
       const to: Look = { rgb: LEVEL_RGB[t.level], w: LEVEL_WIDTH[t.level], op: LEVEL_OPACITY[t.level], wo: t.worse ? 1 : 0 };
       const from = current.current.get(id);
+      if (!from && t.level === 'no_data' && !t.worse) continue; // the layer default already looks like this
       if (!from || reduce) {
         current.current.set(id, to);
         paint(id, to);
@@ -532,8 +546,8 @@ export function TrafficMap({
     };
     const frame = (now: number) => {
       const done = !busy(now);
-      // about 30 updates a second is smooth for points this small, and halves the GeoJSON work
-      if (done || now - lastPush >= 33) {
+      // about 12 updates a second still reads as motion for dots this small, at a third of the GeoJSON work
+      if (done || now - lastPush >= 80) {
         push(now);
         lastPush = now;
       }
