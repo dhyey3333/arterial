@@ -196,6 +196,20 @@ Topic names all start with the team prefix the organizers confirm, for example
 `<prefix>.telemetry-raw`. Consumer groups do too: `<prefix>.api`. Full schemas are in
 [EVENTS.md](EVENTS.md).
 
+### 3.0 What runs on Condense now (28 Nov 2026, build window)
+
+| Piece | Where | Status |
+|---|---|---|
+| Kafka topics `codeverse_telemetry-raw`, `-valid`, `-rejected`, `codeverse_segment-metrics`, `codeverse_congestion-alerts`, `codeverse_incidents`, `codeverse_predictions` | The team's Condense Kafka (2 brokers, SASL SCRAM-SHA-512; the team's ACLs allow only names starting `codeverse_`) | Created by `python -m pipeline.topics` |
+| Condense application `arterial` | Built by Condense from this repository's `Dockerfile` (branch `main`), published as a Transform; its variables are `ARTERIAL_STAGE`, `TEAM_PREFIX` and the `KAFKA_*` settings, the password as a Password variable | Published 1.0.0 |
+| Transform `arterial-validate-telemetry` (`ARTERIAL_STAGE=validate`) | Condense pipeline, Codeverse workspace | Running: telemetry-raw to telemetry-valid and telemetry-rejected |
+| Transform `arterial-segment-window` (`ARTERIAL_STAGE=window`) | Condense pipeline, Codeverse workspace | Running: telemetry-valid to segment-metrics |
+| Simulator (`python -m simulator.sim --region in` and `--region blr`) | A laptop, producing to `codeverse_telemetry-raw` | Running |
+
+Checked with `python -m pipeline.peek` once both stages ran only on Condense: in 75 s, 23,175 raw events,
+27,471 valid (the validator was catching up), 433 rejected by reason and 2,779 segment windows for the
+`in` and `blr` regions.
+
 ### 3.1 What the workspace showed (read on 27 Nov 2026, nothing created)
 
 The team's login opens Condense Core v3.0.0. Read only: no connector, application, topic or
