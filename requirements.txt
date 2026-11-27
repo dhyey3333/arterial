@@ -1,0 +1,12 @@
+# Arterial backend: simulator, network builder, API and model training (Python 3.11+)
+confluent-kafka>=2.6
+osmium>=4.0
+numpy>=2.0
+pyyaml>=6.0
+networkx>=3.3
+scikit-learn>=1.5
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+httpx>=0.27
+pytest>=8.0

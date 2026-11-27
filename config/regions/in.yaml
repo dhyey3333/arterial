@@ -1,0 +1,13 @@
+# All of India: expressways, national highways and state highways (primary roads). The main map.
+id: in
+kind: national
+name: India
+bbox: [68.0, 6.5, 97.5, 37.2]            # west, south, east, north
+road_classes: [motorway, trunk, primary]   # national highways, expressways and state highways
+max_segment_km: 10
+simplify_m: 150                           # road shapes to 150 m for the national view
+probe_share: 0.05                         # each simulated vehicle stands for 20 real ones
+timezone: Asia/Kolkata
+fleet: { vehicles: 3000, seed: 2026 }
+scenarios:
+  incident: { road: chosen in the window, near: chosen in the window }

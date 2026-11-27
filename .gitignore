@@ -27,3 +27,8 @@ __pycache__/
 .taste-skill/
 .DS_Store
 Thumbs.db
+
+# data downloaded or built in the window (OpenStreetMap extracts are large)
+data/raw/
+# the national network is rebuilt from the extract with: python -m simulator.network in
+data/networks/in.json

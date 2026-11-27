@@ -1,0 +1,14 @@
+# Bengaluru in street-level detail. Built from the Geofabrik India extract, cut to this box.
+id: blr
+kind: city
+name: Bengaluru
+bbox: [77.45, 12.82, 77.80, 13.15]       # west, south, east, north
+road_classes: [motorway, trunk, primary, secondary]
+max_segment_km: 3
+simplify_m: 5                             # geometry tolerance for the browser
+probe_share: 1.0                          # share of all traffic the simulated vehicles stand for
+timezone: Asia/Kolkata
+fleet: { vehicles: 600, seed: 2026 }      # tuned to the usage limits
+scenarios:                                # where the demo scenarios happen, by road name
+  build_up: { road: Outer Ring Road, near: Silk Board }
+  incident: { road: Outer Ring Road, near: Agara }
