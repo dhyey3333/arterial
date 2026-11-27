@@ -117,3 +117,17 @@ def test_forecast_follows_the_trend_and_scores_itself_against_persistence():
     f.process("t-A-01", json.dumps(late))
     model = f.model()
     assert model["kind"] == "rule_baseline" and any(e["horizon_min"] == 5 and e["n"] >= 1 for e in model["evaluation"])
+
+
+def test_alerts_emerge_escalate_sustain_and_clear_once_each():
+    from pipeline.alerts import AlertRouter
+
+    r = AlertRouter()
+    kinds = []
+    seq = [("free", None), ("heavy", "free"), ("severe", "heavy"), ("severe", "severe"), ("severe", "severe"), ("severe", "severe"),
+           ("severe", "severe"), ("moderate", "severe")]
+    for i, (lv, prev) in enumerate(seq):
+        m = {"segment_id": "t-A-01", "region": "t", "level": lv, "previous_level": prev, "level_changed": prev is not None and prev != lv,
+             "avg_speed_kph": 10.0, "free_flow_kph": 40.0, "window_end": f"2026-11-28T04:0{i}:00Z"}
+        kinds += [json.loads(o[2])["kind"] for o in r.process("t-A-01", json.dumps(m))]
+    assert kinds == ["emerging", "escalated", "sustained", "cleared"]
