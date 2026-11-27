@@ -130,7 +130,8 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     },
   });
   const w = (base: number, top: number) =>
-    ['interpolate', ['linear'], ['zoom'], 11, ['*', ['coalesce', ['feature-state', 'w'], 1], base], 16, ['*', ['coalesce', ['feature-state', 'w'], 1], top]] as unknown as number;
+    // thin at country zoom (the national tier), full width from city zoom up
+    ['interpolate', ['linear'], ['zoom'], 4, ['*', ['coalesce', ['feature-state', 'w'], 1], base * 0.22], 11, ['*', ['coalesce', ['feature-state', 'w'], 1], base], 16, ['*', ['coalesce', ['feature-state', 'w'], 1], top]] as unknown as number;
   // road and route lines sit under the basemap's names, the way a traffic map keeps street names readable
   const under = map.getLayer(FIRST_LABEL) ? FIRST_LABEL : undefined;
 
@@ -328,7 +329,8 @@ export function TrafficMap({
           attributionControl: false,
           dragRotate: false,
           pitchWithRotate: false,
-          minZoom: 10,
+          // a city opens at street level; the national tier has to zoom out to the whole country
+          minZoom: network.region.kind === 'national' ? 3.5 : 10,
           maxZoom: 18,
           fadeDuration: 0,
         });
