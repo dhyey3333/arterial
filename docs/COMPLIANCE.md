@@ -43,11 +43,14 @@ test the interface before any backend exists. It is never used in the demo and t
 
 | Tool | Used for | How the output was checked |
 |---|---|---|
-| Claude Code (Anthropic) | Writing the frontend, the docs and the fixture road shapes | TypeScript compile, unit tests, Playwright tests, and review in a real browser |
-| Figma AI image generation (GPT Image 2.5) | The landing's four road frames for the forecast section (`frontend/public/landing/forecast/*.webp`), made as one image of the same street at four traffic levels and cut apart | Checked by eye; the page labels them as illustrations, and which one shows follows the console's forecast |
+| Claude Code (Anthropic) | Before the window: the frontend, the docs and the fixture road shapes. In the window: the road-network builder, the simulator, the Condense transforms, the API, the landing's live wiring, and operating the Condense console in a browser (creating the application and its variables, publishing versions, deploying the transforms) | TypeScript compile; unit tests (Vitest, pytest); runs against the team's Kafka topics with `pipeline.peek`; review in a real browser |
 
-The team is responsible for everything submitted. No event credentials, other teams' code or
-personal data were given to an AI tool.
+The team is responsible for everything submitted. The team gave Claude Code the team's Kafka
+username and password so it could write them into the git-ignored `.env` and test the connection;
+they are stored nowhere else in the repository, and in Condense only as a Password variable. No
+other teams' code or personal data were given to an AI tool. Condense's own in-editor assistant
+received one stray prompt by mistake (a git command typed into its chat box); it was stopped and
+none of its output is used.
 
 ## Third-party code, data and assets
 
@@ -57,7 +60,6 @@ personal data were given to an AI tool.
 | React Router | MIT | Routing |
 | Motion | MIT | Interface animation |
 | React Bits: Hyperspeed | MIT + Commons Clause (use inside an application; the component itself is not sold or redistributed) | The night highway under the landing's closing call to action (adapted with a pause, a still under reduced motion, and no crash without WebGL). Copied into `frontend/src/components/reactbits/` with its copyright notice |
-| OGL | Unlicense | The WebGL renderer under Morph Slider |
 | Sonner | MIT | Incident notifications (toasts) |
 | MapLibre GL JS | BSD-3-Clause | Map rendering |
 | three.js, React Three Fiber, drei | MIT | Two 3D views: the forecast page's time stack (the network at now, +5, +10 and +15 minutes as stacked layers) and the analytics landscape (congestion by segment and hour as bars), which the landing page also shows, turned by the scroll |
@@ -69,6 +71,8 @@ personal data were given to an AI tool.
 | Lucide icons | ISC | Icons |
 | Schibsted Grotesk and JetBrains Mono fonts (self-hosted through Fontsource) | SIL Open Font License 1.1 | Typography |
 | Vite, Vitest, Testing Library, Playwright, TypeScript | MIT, Apache-2.0 | Build and test |
+| confluent-kafka, pyosmium, NumPy, PyYAML, FastAPI, Uvicorn, scikit-learn, networkx, pytest | Apache-2.0 (confluent-kafka), BSD-2-Clause (pyosmium), BSD-3-Clause (NumPy, Uvicorn, scikit-learn, networkx), MIT (PyYAML, FastAPI, pytest) | The backend: simulator, network builder, Condense transforms, API and tests |
+| Geofabrik India extract (`india-latest.osm.pbf`, 26 Nov 2026) | © OpenStreetMap contributors, ODbL | Every road network Arterial runs on (`data/networks/`, regenerated with `simulator/osm_extract.py` and `network.py`) |
 
 Backend libraries are added here as they are used in the window.
 

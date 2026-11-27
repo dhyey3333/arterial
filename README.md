@@ -22,16 +22,19 @@ live infrastructure.
 
 | Part | State | Built |
 |---|---|---|
-| Web app (`frontend/`) | Working on design fixtures; reads the live API once it exists | Before the build window, disclosed |
-| Architecture, API and event contracts (`docs/`) | Written | Before the build window |
-| Telemetry simulator | Not started | Build window, from Sat 28 Nov 00:00 IST |
-| Condense pipeline and Kafka topics | Not started | Build window |
-| API service, persistence, forecast, incident and route engines | Not started | Build window |
+| Web app (`frontend/`) | Working against the live API; design fixtures remain for development | Before the build window, disclosed; adapted to the live data in the window |
+| Architecture, API and event contracts (`docs/`) | Written, and corrected with what Condense showed | Before the window, updated in it |
+| Road networks (`simulator/osm_extract.py`, `network.py`) | All of India (expressways, national and state highways: 203,886 segments, 368,587 km) and Bengaluru in street detail (5,933 segments), from the Geofabrik India extract | Build window |
+| Telemetry simulator (`simulator/sim.py`) | Running: seeded vehicles on the real road network, a time-of-day demand model, build-up and incident scenarios started on demand | Build window |
+| Condense pipeline (`pipeline/`) | Running on Condense as three transforms of the application `arterial`, built from this repository's `Dockerfile`: validate-telemetry, segment-window, congestion-forecast | Build window |
+| API (`api/`) | Running: REST, Server-Sent Events, routes (A*), place search, the landing's corridor view, scenario control; state rebuilt from Kafka on start, no database yet | Build window |
+| Forecast | Rule baseline running on Condense, its accuracy measured live against persistence; no trained model yet | Build window |
+| Alerts and incident detection | Not started | Build window |
 
-The rules allow frontend code and documentation before the window and require the backend and
-pipeline to be built inside it. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) lists what was prepared
-when. **End-to-end integration is not claimed** until a simulated event has gone through the
-Condense pipeline and shown up in this app.
+**End to end, demonstrated on 28 Nov 2026:** simulated telemetry goes to the team's Kafka topics on
+Condense, through the three transforms running on Condense, to the API and into the browser, where the
+console shows the whole country live. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) lists what was prepared
+before the window and what was built in it.
 
 ## Documentation
 
@@ -73,18 +76,19 @@ An earlier hero, a night-city map flying from peninsular India down to the corri
 (`frontend/src/landing/CityScene.tsx`, `nightCity.ts` and the traffic animation in `traffic.ts`), is
 still in the source but no longer on the page.
 
-The forecast section plays the console's own forecast on the city (`frontend/src/landing/ForecastMap.tsx`).
-As the page scrolls from now to +15 minutes, each corridor, drawn on its road over a still of Bengaluru at
-night, takes the colour of its forecast speed as a share of its free-flow speed: green at free flow,
-through amber, to red at severe. At now and at 5, 10 and 15 minutes the colour is the forecast's; between
-those steps it blends from one step's forecast to the next. Headlights run along each corridor at its
-forecast speed, so they slow as it reddens, and the corridor the forecast flags worst carries its name and
-its speed at the current step. The still (`frontend/public/landing/forecast-city.webp`, 198 KB) is
-OpenFreeMap's tiles drawn with the landing's night-city layers and saved once, with the corridors projected
-from the same camera (`frontend/src/landing/forecastCorridors.json`), so it shows at once on any connection
-and needs no WebGL. The frame opens once, the corridors drawing themselves in; the headlights pause with
-their button and while off screen; under reduced motion the colours still follow the scroll and nothing
-else moves. With no forecast yet the corridors are grey.
+The forecast section plays Arterial's live forecast on Bengaluru (`frontend/src/landing/ForecastMap.tsx`).
+It draws 21 corridors (Outer Ring Road, Hosur Road, Sarjapur Road, Inner Ring Road and the streets of HSR
+Layout) over a still of the city at night, and asks the API for them alone (`GET /api/v1/corridors`), so
+the page never loads the whole country. Each corridor's level and its 5, 10 and 15 minute forecasts are
+length-weighted from the live segments under it, matched once by `python -m simulator.landing_corridors`
+(89 to 110% of each corridor's length, `config/landing-corridors.json`); the forecasts come from the
+congestion-forecast transform on Condense. As the page scrolls from now to +15 minutes, each corridor takes
+the colour of its forecast speed as a share of its free-flow speed: green at free flow, through amber, to
+red at severe, blending between the steps. Headlights run along each corridor at its forecast speed, and
+the corridor the forecast flags worst carries its name and speed. The still
+(`frontend/public/landing/forecast-city.webp`) is OpenFreeMap's tiles drawn once with the landing's
+night-city layers. With no forecast yet the corridors are grey; the page never shows a forecast it did not
+receive.
 
 The page closes on a night highway under its last call to action (React Bits' Hyperspeed, as it looks at night: tail lights in brake red, headlights in warm white). It is decoration and shows no data; it pauses with its button, rests off screen, and is a still under reduced motion.
 
@@ -93,10 +97,10 @@ comes into view and turns as the page scrolls, drawn from the console's own anal
 the same hours show as the flat grid. The two console screenshots stand up as they scroll in, a CSS
 scroll-driven animation that browsers without view timelines skip.
 
-Against the real API (once it exists):
+Against the live API (see Run the backend, below), with `frontend/.env.local` holding
+`VITE_API_URL=http://localhost:8000` and `VITE_DATA_SOURCE=live`:
 
 ```bash
-cp ../.env.example .env        # set VITE_API_URL
 npm run dev                    # or: npm run build && npm run preview
 ```
 
@@ -114,13 +118,50 @@ npm run typecheck
 ## Configuration
 
 Every variable is listed in [.env.example](.env.example) without values. Secrets live only in
-`.env`, which git ignores. Kafka topics and consumer groups all start with the team prefix the
-organizers assign.
+`.env`, which git ignores. Kafka topics and consumer groups all start with the team prefix
+(`TEAM_PREFIX`, `codeverse_` for this team), as the team's Kafka access requires.
+
+## Run the backend
+
+Needs Python 3.11 or newer.
+
+```bash
+python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # bin/ on macOS and Linux
+cp .env.example .env               # Kafka bootstrap servers, SASL mechanism, username, password, TEAM_PREFIX
+
+# road networks, once: download india-latest.osm.pbf from download.geofabrik.de into data/raw/
+python -m simulator.osm_extract    # India's motorway to tertiary roads, about 8 minutes
+python -m simulator.network in     # the national tier
+python -m simulator.network blr    # Bengaluru in street detail
+python -m pipeline.topics          # creates the team's topics if missing
+
+python -m simulator.sim --region in --vehicles 1500
+python -m simulator.sim --region blr
+ARTERIAL_REGION=in python -m uvicorn api.main:app --port 8000
+```
+
+On Condense, the application `arterial` (Python) is built from this repository's `Dockerfile` and
+published as a Transform. Each stage is one deployment of it with `ARTERIAL_STAGE` set to `validate`,
+`window` or `forecast`, plus `TEAM_PREFIX` and the `KAFKA_*` variables (the password as a Password
+variable). For local testing, `python -m pipeline.run <stage>` runs the same code against the same topics,
+and `python -m pipeline.peek 60` shows what flows through each topic for a minute.
+
+```bash
+.venv/Scripts/python -m pytest tests    # validation, windows, levels with hysteresis, forecast scoring
+```
 
 ## Reproducing the demo
 
-Built during the window: a seeded simulator (`SIM_SEED=2026`) with scenarios for normal traffic,
-peak hours, gradual build-up, a sudden slowdown and an incident. Steps go here once they exist.
+With the simulator, the transforms and the API running, start a jam on Outer Ring Road at Silk Board:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/sim/scenario -H "Content-Type: application/json"   -d '{"scenario": "build_up", "region": "blr", "minutes": 30}'
+```
+
+Over about 18 minutes a 1.5 km stretch of the road loads to severe, with the roads feeding it heavy and
+the next ring moderate. The forecast flags the slowdown before the level changes; the landing's forecast
+section and the console show it as it forms. `{"scenario": "clear"}` ends it. Only the simulator changes;
+nothing outside the simulation is touched.
 
 ## License
 
