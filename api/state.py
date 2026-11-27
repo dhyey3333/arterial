@@ -78,6 +78,7 @@ class State:
         self.incidents: OrderedDict[str, dict] = OrderedDict()
         self.predictions: dict[tuple[str, int], dict] = {}
         self.predictions_made_at: str | None = None
+        self.model: dict | None = None
         self.rates = {name: Rate(30 if name == "metrics" else 10) for name in ("raw", "valid", "rejected", "metrics", "alerts", "incidents", "predictions")}
         self.reject_reasons: Counter = Counter()
         self.late_events = 0
@@ -89,6 +90,27 @@ class State:
         self.lags: dict[str, dict] = {}
         self.throughput: deque = deque(maxlen=360)
         self.listeners: list = []  # callables(event_type, payload)
+        self._load_corridors()
+
+    def _load_corridors(self) -> None:
+        """The landing's 21 Bengaluru corridors and the live segments under each (config/landing-corridors.json)."""
+        import gzip
+        path = ROOT / "config" / "landing-corridors.json"
+        self.corridor_map = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"region": None, "corridors": {}}
+        self.corridor_region = self.corridor_map.get("region")
+        self.corridor_segs: dict[str, dict] = {}
+        wanted = {s for c in self.corridor_map["corridors"].values() for s in c["segments"]}
+        idx_path = ROOT / "data" / "networks" / f"{self.corridor_region}.index.json.gz"
+        if wanted and idx_path.exists():
+            with gzip.open(idx_path, "rt", encoding="utf-8") as f:
+                idx = json.load(f)
+            cols = idx["columns"]
+            for row in idx["segments"]:
+                if row[0] in wanted:
+                    self.corridor_segs[row[0]] = dict(zip(cols, row))
+        self.side_states: dict[str, dict] = {}
+        self.side_predictions: dict[tuple[str, int], dict] = {}
+        self.side_vehicles: dict[str, float] = {}
 
     # ---------- network ----------
 
@@ -122,6 +144,8 @@ class State:
     def on_valid(self, ev: dict) -> None:
         self.rates["valid"].add()
         if ev.get("region") != self.region_id:
+            if ev.get("region") == self.corridor_region:
+                self.side_vehicles[ev.get("vehicle_id")] = time.time()
             return
         now = time.time()
         try:
@@ -149,6 +173,8 @@ class State:
 
     def on_metric(self, m: dict) -> None:
         self.rates["metrics"].add()
+        if m.get("region") == self.corridor_region and m["segment_id"] in self.corridor_segs:
+            self.side_states[m["segment_id"]] = m
         if m.get("region") != self.region_id or m["segment_id"] not in self.segments:
             return
         self.late_events += int(m.get("late_events") or 0)
@@ -179,7 +205,15 @@ class State:
         self.emit("incident", inc)
 
     def on_prediction(self, p: dict) -> None:
+        if p.get("schema") == "arterial.model.v1":
+            self.model = {k: v for k, v in p.items() if k not in ("schema", "running_since")}
+            return
         self.rates["predictions"].add()
+        if p.get("region") == self.corridor_region and p["segment_id"] in self.corridor_segs:
+            self.side_predictions[(p["segment_id"], int(p["horizon_min"]))] = p
+        if p.get("region") != self.region_id:
+            return
+        p = {k: v for k, v in p.items() if k not in ("schema", "region", "model_kind", "pipeline_version")}
         with self.lock:
             self.predictions[(p["segment_id"], int(p["horizon_min"]))] = p
             self.predictions_made_at = p.get("made_at")
@@ -307,3 +341,65 @@ class State:
 
 def _ts(t: float | None) -> str | None:
     return iso(datetime.fromtimestamp(t, timezone.utc)) if t else None
+
+
+def _level(r: float) -> str:
+    return "free" if r >= 0.75 else "moderate" if r >= 0.5 else "heavy" if r >= 0.3 else "severe"
+
+
+def corridors(state: "State") -> dict:
+    """Each landing corridor's live level and its 5, 10 and 15 minute forecasts, length-weighted over the
+    live segments under it. A corridor none of whose segments has a recent window is no_data."""
+    now_dt = datetime.now(timezone.utc)
+    fresh_cut = iso(now_dt - timedelta(seconds=STALE_S))
+    pred_cut = iso(now_dt - timedelta(minutes=3))
+    levels, preds = {}, []
+    made = None
+    for cid, c in state.corridor_map["corridors"].items():
+        segs = [s for s in c["segments"] if s in state.corridor_segs]
+        rows = [(state.side_states[s], state.corridor_segs[s]["length_m"]) for s in segs
+                if s in state.side_states and state.side_states[s]["window_end"] >= fresh_cut and state.side_states[s]["avg_speed_kph"]]
+        if rows:
+            L = sum(w for _, w in rows)
+            v = sum(r["avg_speed_kph"] * w for r, w in rows) / L
+            vff = sum(r["free_flow_kph"] * w for r, w in rows) / L
+            levels[cid] = _level(v / vff)
+        else:
+            levels[cid] = "no_data"
+        for h in (5, 10, 15):
+            ps = [(state.side_predictions[(s, h)], state.corridor_segs[s]) for s in segs
+                  if (s, h) in state.side_predictions and state.side_predictions[(s, h)]["made_at"] >= pred_cut]
+            if not ps:
+                continue
+            L = sum(seg["length_m"] for _, seg in ps)
+            wavg = lambda f: sum(f(p) * seg["length_m"] for p, seg in ps) / L  # noqa: E731
+            vff = sum(seg["free_flow_kph"] * seg["length_m"] for _, seg in ps) / L
+            pred = wavg(lambda p: p["predicted_speed_kph"])
+            cur = wavg(lambda p: p["current_speed_kph"] or p["predicted_speed_kph"])
+            drivers = Counter(d for p, _ in ps for d in p["drivers"][:1])
+            made = max(made or "", max(p["made_at"] for p, _ in ps))
+            preds.append({
+                "segment_id": cid,
+                "made_at": max(p["made_at"] for p, _ in ps),
+                "horizon_min": h,
+                "target_time": max(p["target_time"] for p, _ in ps),
+                "current_speed_kph": round(cur, 1),
+                "predicted_speed_kph": round(pred, 1),
+                "expected_change_kph": round(pred - cur, 1),
+                "interval_kph": [round(wavg(lambda p: p["interval_kph"][0]), 1), round(wavg(lambda p: p["interval_kph"][1]), 1)],
+                "predicted_level": _level(pred / vff),
+                "risk": round(wavg(lambda p: p["risk"]), 3),
+                "drivers": [d for d, _ in drivers.most_common(2)],
+                "segments": len(ps),
+            })
+    live_vehicles = sum(1 for t in state.side_vehicles.values() if time.time() - t < 60)
+    return {
+        "as_of": iso(),
+        "region": state.corridor_region,
+        "made_at": made,
+        "model": state.model,
+        "now": levels,
+        "predictions": preds,
+        "vehicles": live_vehicles,
+        "system": state.system(),
+    }

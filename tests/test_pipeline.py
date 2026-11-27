@@ -95,3 +95,25 @@ def test_harmonic_mean_counts_a_stopped_vehicle_at_2_kph():
         w.process("t-A-01", ev(i, speed=s, ts=T0 + timedelta(seconds=i)), now=T0)
     m = json.loads(w.tick(now=T0 + timedelta(seconds=60))[0][2])
     assert abs(m["avg_speed_kph"] - 3 / (1 / 2 + 2 / 40)) < 0.1
+
+
+def test_forecast_follows_the_trend_and_scores_itself_against_persistence():
+    from pipeline.forecast import Forecaster
+
+    nets = {"t": {"region": NET["t"]["region"], "by_id": {k: dict(v, from_node="a", to_node="b") for k, v in NET["t"]["by_id"].items()}}}
+    f = Forecaster(nets)
+    outs = []
+    for i, v in enumerate([36, 33, 30, 27, 24, 21]):
+        m = {"segment_id": "t-A-01", "region": "t", "window_end": (T0 + timedelta(seconds=30 * i)).isoformat().replace("+00:00", "Z"),
+             "avg_speed_kph": v, "free_flow_kph": 40, "density_veh_per_km": 10, "level": "moderate"}
+        outs = f.process("t-A-01", json.dumps(m))
+    preds = {json.loads(o[2])["horizon_min"]: json.loads(o[2]) for o in outs}
+    assert set(preds) == {5, 10, 15}
+    assert preds[5]["predicted_speed_kph"] < 21 and preds[15]["predicted_speed_kph"] >= 2  # falling, clipped
+    assert preds[15]["predicted_level"] == "severe" and preds[5]["risk"] > 0.5
+    # the window the last 5-minute forecast was aimed at arrives, and that forecast gets scored
+    late = {"segment_id": "t-A-01", "region": "t", "window_end": (T0 + timedelta(minutes=5, seconds=150)).isoformat().replace("+00:00", "Z"),
+            "avg_speed_kph": 10, "free_flow_kph": 40, "density_veh_per_km": 10, "level": "severe"}
+    f.process("t-A-01", json.dumps(late))
+    model = f.model()
+    assert model["kind"] == "rule_baseline" and any(e["horizon_min"] == 5 and e["n"] >= 1 for e in model["evaluation"])

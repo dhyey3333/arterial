@@ -340,8 +340,8 @@ def main(region_id: str) -> None:
     # what the Condense stages need, small enough to ship in their image: one row per segment
     index = {
         "region": network["region"],
-        "columns": ["id", "length_m", "free_flow_kph", "lanes", "oneway", "road_class"],
-        "segments": [[s["id"], s["length_m"], s["free_flow_kph"], s["lanes"], s["oneway"], s["road_class"]] for s in network["segments"]],
+        "columns": ["id", "length_m", "free_flow_kph", "lanes", "oneway", "road_class", "from_node", "to_node"],
+        "segments": [[s["id"], s["length_m"], s["free_flow_kph"], s["lanes"], s["oneway"], s["road_class"], s["from_node"], s["to_node"]] for s in network["segments"]],
     }
     ipath = OUT / f"{region_id}.index.json.gz"
     with gzip.open(ipath, "wt", encoding="utf-8") as f:

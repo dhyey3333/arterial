@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from api import kafka_worker
 from api.routing import Router
-from api.state import LEVELS, State, iso, parse
+from api.state import LEVELS, State, corridors as corridor_view, iso, parse
 from pipeline.common import load_env
 
 load_env()
@@ -201,8 +201,9 @@ def incident(incident_id: str):
 
 
 def prediction_set() -> dict:
-    preds = list(state.predictions.values())
-    return {"made_at": state.predictions_made_at or iso(), "horizons": [5, 10, 15], "model": MODEL_PENDING, "predictions": preds}
+    cutoff = iso(datetime.now(timezone.utc) - timedelta(minutes=5))
+    preds = [p for p in state.predictions.values() if p["made_at"] >= cutoff]
+    return {"made_at": state.predictions_made_at or iso(), "horizons": [5, 10, 15], "model": state.model or MODEL_PENDING, "predictions": preds}
 
 
 MODEL_PENDING = {
@@ -224,7 +225,7 @@ def predictions(horizon: int | None = None):
 
 @app.get("/api/v1/predictions/model")
 def model():
-    return MODEL_PENDING
+    return state.model or MODEL_PENDING
 
 
 @app.post("/api/v1/routes")
@@ -305,6 +306,12 @@ def system():
 def throughput(minutes: int = 15):
     cutoff = iso(datetime.now(timezone.utc) - timedelta(minutes=minutes))
     return {"points": [p for p in state.throughput if p["ts"] >= cutoff]}
+
+
+@app.get("/api/v1/corridors")
+def corridors():
+    """The landing page's 21 Bengaluru corridors, live: no need for the whole network there."""
+    return corridor_view(state)
 
 
 @app.get("/api/v1/health")

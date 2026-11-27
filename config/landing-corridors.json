@@ -1,0 +1,252 @@
+{
+ "region": "blr",
+ "corridors": {
+  "ORR-01": {
+   "name": "Outer Ring Road",
+   "length_m": 2830,
+   "segments": [
+    "blr-ORR-196",
+    "blr-ORR-182",
+    "blr-ORR-201",
+    "blr-ORR-177",
+    "blr-ORR-206",
+    "blr-ORR-187",
+    "blr-ORR-207",
+    "blr-ORR-180",
+    "blr-ORR-186"
+   ],
+   "matched_m": 2640
+  },
+  "ORR-02": {
+   "name": "Outer Ring Road",
+   "length_m": 2792,
+   "segments": [
+    "blr-ORR-158",
+    "blr-ORR-166",
+    "blr-ORR-173"
+   ],
+   "matched_m": 2520
+  },
+  "ORR-03": {
+   "name": "Outer Ring Road",
+   "length_m": 2793,
+   "segments": [
+    "blr-ORR-149",
+    "blr-ORR-136",
+    "blr-ORR-158"
+   ],
+   "matched_m": 2600
+  },
+  "ORR-04": {
+   "name": "Outer Ring Road",
+   "length_m": 2739,
+   "segments": [
+    "blr-ORR-104",
+    "blr-ORR-114",
+    "blr-ORR-127",
+    "blr-ORR-125",
+    "blr-ORR-136",
+    "blr-ORR-121",
+    "blr-ORR-134",
+    "blr-ORR-128",
+    "blr-ORR-119",
+    "blr-ORR-112",
+    "blr-ORR-124",
+    "blr-ORR-131",
+    "blr-ORR-130"
+   ],
+   "matched_m": 2555
+  },
+  "HSR-01": {
+   "name": "Hosur Road",
+   "length_m": 1351,
+   "segments": [
+    "blr-HR2-33",
+    "blr-HR2-37",
+    "blr-HR2-30",
+    "blr-HR2-34"
+   ],
+   "matched_m": 1360
+  },
+  "HSR-02": {
+   "name": "Hosur Road",
+   "length_m": 1191,
+   "segments": [
+    "blr-HR2-41",
+    "blr-HR2-39",
+    "blr-HR2-45",
+    "blr-HR2-37",
+    "blr-HR2-43"
+   ],
+   "matched_m": 1128
+  },
+  "HSR-03": {
+   "name": "Hosur Road",
+   "length_m": 825,
+   "segments": [
+    "blr-HR2-49",
+    "blr-HR2-51",
+    "blr-HR2-45",
+    "blr-HR2-52"
+   ],
+   "matched_m": 740
+  },
+  "SJR-01": {
+   "name": "Sarjapur Road",
+   "length_m": 1612,
+   "segments": [
+    "blr-SR5-31",
+    "blr-SR5-34",
+    "blr-SR11-13",
+    "blr-SR5-30",
+    "blr-SR5-29",
+    "blr-SR5-33"
+   ],
+   "matched_m": 1693
+  },
+  "SJR-02": {
+   "name": "Sarjapur Road",
+   "length_m": 1633,
+   "segments": [
+    "blr-SR5-41",
+    "blr-SR5-39",
+    "blr-SR5-34",
+    "blr-SR5-40"
+   ],
+   "matched_m": 1510
+  },
+  "SJR-03": {
+   "name": "Sarjapur Road",
+   "length_m": 1534,
+   "segments": [
+    "blr-SR5-46",
+    "blr-SR5-44",
+    "blr-SR5-48",
+    "blr-SR5-49",
+    "blr-SGR2-07"
+   ],
+   "matched_m": 1360
+  },
+  "KFT-01": {
+   "name": "80 Feet Road",
+   "length_m": 1658,
+   "segments": [
+    "blr-8FR-027",
+    "blr-8FR-033",
+    "blr-8FR-031",
+    "blr-8FR-030",
+    "blr-8FR-035",
+    "blr-8FR-038"
+   ],
+   "matched_m": 1604
+  },
+  "IRR-01": {
+   "name": "Inner Ring Road",
+   "length_m": 1743,
+   "segments": [
+    "blr-IRR-03",
+    "blr-IRR-01"
+   ],
+   "matched_m": 1680
+  },
+  "IRR-02": {
+   "name": "Inner Ring Road",
+   "length_m": 1643,
+   "segments": [
+    "blr-IRR-01"
+   ],
+   "matched_m": 1560
+  },
+  "M27-01": {
+   "name": "27th Main Road",
+   "length_m": 1388,
+   "segments": [
+    "blr-2MR5-03",
+    "blr-2MR5-06",
+    "blr-2MR5-04",
+    "blr-2MR5-07",
+    "blr-2MR5-02",
+    "blr-2MR5-01"
+   ],
+   "matched_m": 1366
+  },
+  "M19-01": {
+   "name": "19th Main Road",
+   "length_m": 1620,
+   "segments": [
+    "blr-1MR7-02",
+    "blr-1MR7-08",
+    "blr-1MR7-05",
+    "blr-1MR7-07",
+    "blr-1MR7-03",
+    "blr-1MR7-01",
+    "blr-1MR7-06",
+    "blr-1MR7-04"
+   ],
+   "matched_m": 1580
+  },
+  "TVK-01": {
+   "name": "Tavarekere Main Road",
+   "length_m": 1202,
+   "segments": [
+    "blr-TMR2-07",
+    "blr-TMR2-05",
+    "blr-TMR2-02",
+    "blr-TMR2-03",
+    "blr-TMR2-06"
+   ],
+   "matched_m": 1163
+  },
+  "M29-01": {
+   "name": "29th Main Road",
+   "length_m": 1156,
+   "segments": [
+    "blr-2MR6-06",
+    "blr-2MR6-04",
+    "blr-2MR6-02"
+   ],
+   "matched_m": 1056
+  },
+  "M29-02": {
+   "name": "29th Main Road",
+   "length_m": 1115,
+   "segments": [
+    "blr-2MR6-06",
+    "blr-2MR6-05"
+   ],
+   "matched_m": 1160
+  },
+  "BGR-01": {
+   "name": "Begur Road",
+   "length_m": 1561,
+   "segments": [
+    "blr-BR9-04",
+    "blr-BR9-06",
+    "blr-BR9-05"
+   ],
+   "matched_m": 1720
+  },
+  "MHM-01": {
+   "name": "Dr M H Marigowda Road",
+   "length_m": 1233,
+   "segments": [
+    "blr-DMHMR-05",
+    "blr-DMHMR-03",
+    "blr-DMHMR-04",
+    "blr-DMHMR2-02"
+   ],
+   "matched_m": 1252
+  },
+  "M14-01": {
+   "name": "14th Main Road",
+   "length_m": 1330,
+   "segments": [
+    "blr-1MR-04",
+    "blr-1MR-02",
+    "blr-1MR-03",
+    "blr-1MR-06"
+   ],
+   "matched_m": 1315
+  }
+ }
+}

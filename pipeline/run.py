@@ -2,6 +2,7 @@
 
   ARTERIAL_STAGE=validate   telemetry-raw   -> telemetry-valid, telemetry-rejected
   ARTERIAL_STAGE=window     telemetry-valid -> segment-metrics
+  ARTERIAL_STAGE=forecast   segment-metrics -> predictions (5, 10 and 15 minutes ahead)
 """
 
 import os
@@ -10,6 +11,7 @@ import sys
 STAGES = {
     "validate": "pipeline.validate",
     "window": "pipeline.window",
+    "forecast": "pipeline.forecast",
 }
 
 
