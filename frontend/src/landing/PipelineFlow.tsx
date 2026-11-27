@@ -1,4 +1,4 @@
-import { useLive } from '../data/store';
+import { useLanding } from '../data/landing';
 import { fmtOne } from '../lib/format';
 
 interface Node {
@@ -51,7 +51,7 @@ function edgePath(a: Node, b: Node): string {
  * status when it has one; the drawing never invents them.
  */
 export function PipelineFlow() {
-  const system = useLive((s) => s.system);
+  const system = useLanding().system;
   const rate = (id: string) => {
     const st = system?.stages.find((s) => s.id === id);
     return st ? `${fmtOne(st.events_out_per_s || st.events_in_per_s)}/s` : null;

@@ -29,9 +29,12 @@ async function optional<T>(p: Promise<T>): Promise<T | null> {
   }
 }
 
-/** Loads REST snapshots once, then keeps the store current from the stream. */
+/** Loads REST snapshots once something needs them, then keeps the store current from the stream. */
 export function LiveProvider({ source, children }: { source: DataSource; children: ReactNode }) {
+  // started by the console (and by the landing on design fixtures); the live landing reads /corridors instead
+  const wanted = useLive((s) => s.wanted);
   useEffect(() => {
+    if (!wanted) return;
     const store = useLive.getState();
     let ctrl = new AbortController();
     let loading = false;
@@ -92,7 +95,7 @@ export function LiveProvider({ source, children }: { source: DataSource; childre
       disconnect();
       useLive.getState().reset();
     };
-  }, [source]);
+  }, [source, wanted]);
 
   return <SourceContext.Provider value={source}>{children}</SourceContext.Provider>;
 }

@@ -1,8 +1,10 @@
 import { Link } from 'react-router';
 import { ArrowRight } from 'lucide-react';
 import { LevelSwatch } from '../components/ui/primitives';
-import { useAtRisk } from '../data/derived';
-import { useLive } from '../data/store';
+import { useMemo } from 'react';
+import { pickAtRisk } from '../data/derived';
+import { useLanding } from '../data/landing';
+import { networkOrBundled } from './geometry';
 import { LEVEL_LABEL, fmtSigned, fmtTime } from '../lib/format';
 
 /**
@@ -11,12 +13,11 @@ import { LEVEL_LABEL, fmtSigned, fmtTime } from '../lib/format';
  * same risk meter, the forecast's time and model in mono underneath. With no forecast it says so.
  */
 export function HeroPanel() {
-  const predictions = useLive((s) => s.predictions);
-  const states = useLive((s) => s.states);
-  const segIndex = useLive((s) => s.segIndex);
-  const network = useLive((s) => s.network);
-  const rows = useAtRisk(10, 3);
-  const total = network?.segments.length ?? 21;
+  const { predictions, now, madeAt, model } = useLanding();
+  const net = networkOrBundled(null);
+  const names = useMemo(() => Object.fromEntries(net.segments.map((s) => [s.id, s.name])), [net]);
+  const rows = useMemo(() => pickAtRisk(predictions, now ?? {}, 10, 3), [predictions, now]);
+  const total = net.segments.length;
 
   return (
     <aside className="lp-panel lp-rise" style={{ '--i': 6 } as React.CSSProperties} aria-labelledby="lp-panel-h">
@@ -31,16 +32,16 @@ export function HeroPanel() {
       ) : rows.length ? (
         <ol className="lp-panel__rows">
           {rows.map((p) => {
-            const now = states[p.segment_id]?.level ?? 'no_data';
+            const level = now?.[p.segment_id] ?? 'no_data';
             return (
               <li key={p.segment_id} className="lp-panel__row">
                 <span className="lp-panel__road">
-                  {segIndex[p.segment_id]?.name ?? p.segment_id} <span className="lp-panel__id">{p.segment_id}</span>
+                  {names[p.segment_id] ?? p.segment_id} <span className="lp-panel__id">{p.segment_id}</span>
                 </span>
                 <span className="lp-panel__delta num">{fmtSigned(p.expected_change_kph)} km/h</span>
                 <span className="lp-panel__levels">
-                  <LevelSwatch level={now} />
-                  <span className="lp-panel__from">{LEVEL_LABEL[now]}</span>
+                  <LevelSwatch level={level} />
+                  <span className="lp-panel__from">{LEVEL_LABEL[level]}</span>
                   <span aria-hidden="true">→</span>
                   <span className="visually-hidden">to</span>
                   <LevelSwatch level={p.predicted_level} />
@@ -58,7 +59,7 @@ export function HeroPanel() {
       )}
       <div className="lp-panel__foot">
         <span className="num">
-          {predictions ? `${predictions.model.kind === 'rule_baseline' ? 'rule-based baseline' : `model ${predictions.model.version}`} · made ${fmtTime(predictions.made_at)} IST` : 'no forecast yet'}
+          {predictions && madeAt ? `${!model || model.kind === 'rule_baseline' ? 'rule-based baseline' : `model ${model.version}`} · made ${fmtTime(madeAt)} IST` : 'no forecast yet'}
         </span>
         <Link to="/forecast" viewTransition className="lp-panel__link">
           Forecast <ArrowRight size={13} aria-hidden="true" />

@@ -4,8 +4,7 @@ import { Activity, ArrowRight, ChartColumn, Radar, Route, Server, TrendingUp, Tr
 import { BrandMark } from '../components/BrandMark';
 import { CloseRoad } from '../landing/CloseRoad';
 import { useSource } from '../data/LiveProvider';
-import { useLive } from '../data/store';
-import type { SegmentLevel } from '../lib/contract';
+import { LandingDataProvider, useLanding } from '../data/landing';
 import { ForecastScrub } from '../landing/ForecastScrub';
 import { HeroVideo } from '../landing/HeroVideo';
 import { HeroPanel } from '../landing/HeroPanel';
@@ -58,8 +57,7 @@ function OpenConsole({ className = '', children = 'Open the console' }: { classN
 /** Where the picture's data comes from, said under the headline's eyebrow. */
 function SourceLine() {
   const source = useSource();
-  const conn = useLive((s) => s.connection);
-  const live = conn.state === 'live';
+  const live = useLanding().status === 'live';
   const text =
     source.kind === 'fixtures'
       ? 'Showing design fixtures: hand-written sample data'
@@ -77,8 +75,7 @@ function SourceLine() {
 /** The nav's readout of the stream, in mono: what a control room glances at first. */
 function StreamReadout() {
   const source = useSource();
-  const conn = useLive((s) => s.connection);
-  const live = conn.state === 'live';
+  const live = useLanding().status === 'live';
   const text = source.kind === 'fixtures' ? 'stream: fixtures' : live ? 'stream: live' : 'stream: down';
   return (
     <span className={`lp-readout ${live || source.kind === 'fixtures' ? 'is-on' : ''}`}>
@@ -89,20 +86,20 @@ function StreamReadout() {
 }
 
 export default function Landing() {
-  const network = useLive((s) => s.network);
-  const states = useLive((s) => s.states);
-  const predictions = useLive((s) => s.predictions);
-  const plane = useMemo(() => toPlane(network), [network]);
-  const net = useMemo(() => networkOrBundled(network), [network]);
-  const region = net.region?.name ?? 'Bengaluru';
+  return (
+    <LandingDataProvider>
+      <LandingPage />
+    </LandingDataProvider>
+  );
+}
 
-  const levels = useMemo(() => {
-    const ids = Object.keys(states);
-    if (!ids.length) return null;
-    const out: Record<string, SegmentLevel> = {};
-    for (const id of ids) out[id] = states[id].level;
-    return out;
-  }, [states]);
+function LandingPage() {
+  // The landing always draws its own 21 Bengaluru corridors; their live levels and forecasts come from
+  // /corridors, averaged from the real segments under each one, so the page never loads the whole country.
+  const plane = useMemo(() => toPlane(null), []);
+  const net = networkOrBundled(null);
+  const region = net.region?.name ?? 'Bengaluru';
+  const { now: levels, predictions } = useLanding();
 
   useEffect(() => {
     document.title = "Arterial: traffic forecasts for India's control rooms";
@@ -164,7 +161,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <ForecastScrub plane={plane} now={levels} predictions={predictions?.predictions ?? null} />
+        <ForecastScrub plane={plane} now={levels} predictions={predictions} />
 
         <section className="lp-section" id="pipeline" aria-labelledby="lp-pipe-h">
           <div className="lp-wrap">

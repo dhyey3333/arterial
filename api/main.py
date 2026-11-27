@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import statistics
 import time
 import uuid
@@ -22,7 +23,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from api import kafka_worker
 from api.routing import Router
-from api.state import LEVELS, State, corridors as corridor_view, iso, parse
+from api.state import LEVELS, ROOT, State, corridors as corridor_view, iso, parse
 from pipeline.common import load_env
 
 load_env()
@@ -161,10 +162,11 @@ def segment(segment_id: str, minutes: int = 60):
     if not seg:
         return error(404, "unknown_segment", f"No segment {segment_id} in {REGION}.")
     cutoff = iso(datetime.now(timezone.utc) - timedelta(minutes=minutes))
-    hist = [h for h in state.history.get(segment_id, ()) if h["window_end"] >= cutoff]
     fresh = {s["segment_id"]: s for s in state.fresh_states()}
-    preds = [p for (sid, _), p in state.predictions.items() if sid == segment_id]
-    incs = [i for i in state.incidents.values() if i["segment_id"] == segment_id]
+    with state.lock:
+        preds = [p for (sid, _), p in state.predictions.items() if sid == segment_id]
+        incs = [i for i in state.incidents.values() if i["segment_id"] == segment_id]
+        hist = [h for h in state.history.get(segment_id, ()) if h["window_end"] >= cutoff]
     public = {k: seg[k] for k in ("id", "name", "road_class", "from_node", "to_node", "length_m", "speed_limit_kph", "free_flow_kph", "lanes", "geometry")}
     return {"segment": public, "state": fresh.get(segment_id), "history": hist, "predictions": preds, "incidents": incs}
 
@@ -183,12 +185,15 @@ def history(minutes: int = 60):
 
 @app.get("/api/v1/alerts")
 def alerts(status: str = "active", limit: int = 50):
-    return {"alerts": list(state.alerts)[: max(1, min(limit, 500))]}
+    with state.lock:
+        items = list(state.alerts)
+    return {"alerts": items[: max(1, min(limit, 500))]}
 
 
 @app.get("/api/v1/incidents")
 def incidents(status: str = "active", limit: int = 100):
-    items = list(state.incidents.values())
+    with state.lock:
+        items = list(state.incidents.values())
     if status in ("active", "resolved"):
         items = [i for i in items if i.get("status") == status]
     return {"incidents": items[:limit]}
@@ -202,7 +207,9 @@ def incident(incident_id: str):
 
 def prediction_set() -> dict:
     cutoff = iso(datetime.now(timezone.utc) - timedelta(minutes=5))
-    preds = [p for p in state.predictions.values() if p["made_at"] >= cutoff]
+    with state.lock:
+        items = list(state.predictions.values())
+    preds = [p for p in items if p["made_at"] >= cutoff]
     return {"made_at": state.predictions_made_at or iso(), "horizons": [5, 10, 15], "model": state.model or MODEL_PENDING, "predictions": preds}
 
 
@@ -265,7 +272,9 @@ def analytics(days: int = 7):
             "vehicles": round(statistics.mean(p["vehicles"] for p in ps)) if ps else 0,
         })
     seg_rows, heat = [], []
-    for sid, hist in state.history.items():
+    with state.lock:
+        histories = [(sid, list(h)) for sid, h in state.history.items()]
+    for sid, hist in histories:
         speeds = sorted(h["avg_speed_kph"] for h in hist if h["avg_speed_kph"] is not None)
         if len(speeds) < 2:
             continue
@@ -306,6 +315,29 @@ def system():
 def throughput(minutes: int = 15):
     cutoff = iso(datetime.now(timezone.utc) - timedelta(minutes=minutes))
     return {"points": [p for p in state.throughput if p["ts"] >= cutoff]}
+
+
+@app.post("/api/v1/sim/scenario")
+async def sim_scenario(request: Request):
+    """Simulator only (docs/API.md): start or clear a scenario in a running simulator. Never touches real
+    infrastructure. Body: {"scenario": "build_up" | "incident" | "clear", "region": "blr", "minutes": 20,
+    "segment_id": optional}."""
+    try:
+        body = await request.json()
+    except ValueError:
+        body = {}
+    kind = body.get("scenario")
+    if kind not in ("build_up", "incident", "clear"):
+        return error(400, "bad_request", "scenario must be build_up, incident or clear.")
+    region = body.get("region") or state.corridor_region or REGION
+    if not re.fullmatch(r"[a-z]{2,8}", str(region)):
+        return error(400, "bad_request", "region must be a region id such as blr or in.")
+    minutes = max(1, min(int(body.get("minutes") or 20), 120))
+    req = {"scenario": kind, "minutes": minutes, "segment_id": body.get("segment_id"), "requested_at": iso()}
+    path = ROOT / "data" / "sim-control" / f"{region}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(req), encoding="utf-8")
+    return {"scenario": kind, "region": region, "minutes": minutes, "applied_at": req["requested_at"]}
 
 
 @app.get("/api/v1/corridors")

@@ -179,9 +179,20 @@ class Traffic:
             self.drift[sid] = a * self.drift[sid] + self.rng.gauss(0, sd)
 
     def start(self, kind: str, segment_id: str, now: datetime, minutes: float) -> None:
-        upstream = set(self.into.get(segment_id, ()))
-        second = set().union(*(self.into[u] for u in upstream)) - upstream - {segment_id} if upstream else set()
-        self.scenario = {"kind": kind, "segment": segment_id, "upstream": upstream, "second": second, "start": now, "minutes": minutes}
+        """A build-up loads a stretch of the road (1.5 km either side of the bottleneck), as a queue does;
+        an incident blocks the one segment. Each gets a heavy ring of feeding roads and a moderate one."""
+        seg = self.net.segments[segment_id]
+        core = {segment_id}
+        if kind == "build_up":
+            mx, my = seg["geometry"][len(seg["geometry"]) // 2]
+            for sid, s in self.net.segments.items():
+                if s["name"] == seg["name"]:
+                    x, y = s["geometry"][len(s["geometry"]) // 2]
+                    if _metres(mx, my, x, y) <= 1500:
+                        core.add(sid)
+        upstream = set().union(*(self.into[c] for c in core)) - core
+        second = set().union(*(self.into[u] for u in upstream)) - upstream - core if upstream else set()
+        self.scenario = {"kind": kind, "segment": segment_id, "core": core, "upstream": upstream, "second": second, "start": now, "minutes": minutes}
 
     def load(self, sid: str, now: datetime) -> float:
         x = demand(now) * self.base[sid] * (1 + self.drift[sid])
@@ -192,12 +203,14 @@ class Traffic:
                 self.scenario = None
             elif sc["kind"] == "build_up":
                 ramp = min(age / (0.6 * sc["minutes"]), 1.0)
-                if sid == sc["segment"]:
-                    x *= 1 + 2.4 * ramp
+                # a jam forms at any hour: the load rises to at least a severe level at the bottleneck,
+                # heavy on the roads feeding it and moderate one junction further back
+                if sid in sc["core"]:
+                    x = max(x * (1 + 2.4 * ramp), 1.7 * ramp)
                 elif sid in sc["upstream"]:
-                    x *= 1 + 1.3 * ramp
+                    x = max(x * (1 + 1.3 * ramp), 1.25 * ramp)
                 elif sid in sc["second"]:
-                    x *= 1 + 0.5 * ramp
+                    x = max(x * (1 + 0.5 * ramp), 0.9 * ramp)
             elif sc["kind"] == "incident":
                 if sid == sc["segment"]:
                     return 3.0
@@ -387,6 +400,39 @@ class Simulator:
                 self.sink.send(ev["road_segment_id"], json.dumps(ev, separators=(",", ":")))
 
 
+CONTROL_DIR = ROOT / "data" / "sim-control"
+
+
+def poll_control(sim: "Simulator", region: str, now: datetime, seen: float) -> float:
+    """Scenario requests from the API (POST /api/v1/sim/scenario) arrive as data/sim-control/<region>.json:
+    {"scenario": "build_up" | "incident" | "clear", "minutes": 20, "segment_id": optional}. Only this
+    simulator changes; nothing outside the simulation is touched."""
+    path = CONTROL_DIR / f"{region}.json"
+    try:
+        mtime = path.stat().st_mtime
+    except FileNotFoundError:
+        return seen
+    if mtime <= seen:
+        return seen
+    try:
+        req = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return mtime
+    kind = req.get("scenario")
+    if kind == "clear":
+        sim.traffic.scenario = None
+        print("scenario cleared", file=sys.stderr)
+    elif kind in ("build_up", "incident"):
+        target = req.get("segment_id")
+        if target not in sim.net.segments:
+            where = sim.cfg.get("scenarios", {}).get(kind, {})
+            target = sim.find_segment(where.get("road", ""), where.get("near", ""))
+        if target:
+            sim.traffic.start(kind, target, now, float(req.get("minutes") or 20))
+            print(f"scenario {kind} started on {target} for {req.get('minutes') or 20} min", file=sys.stderr)
+    return mtime
+
+
 def main() -> None:
     load_env()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -429,6 +475,7 @@ def main() -> None:
     t0 = time.monotonic()
     last, last_log, last_sent = t0, t0, 0
     started = False
+    control_seen = CONTROL_DIR.joinpath(f"{args.region}.json").stat().st_mtime if CONTROL_DIR.joinpath(f"{args.region}.json").exists() else 0.0
     while not stop:
         now_m = time.monotonic()
         dt = now_m - last
@@ -439,6 +486,7 @@ def main() -> None:
             sim.traffic.start(args.scenario, target, now, args.scenario_minutes)
             started = True
             print(f"scenario {args.scenario} started on {target}", file=sys.stderr)
+        control_seen = poll_control(sim, args.region, now, control_seen)
         sim.tick(now, t, dt)
         if now_m - last_log >= 10:
             rate = (sink.sent - last_sent) / (now_m - last_log)

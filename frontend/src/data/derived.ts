@@ -23,11 +23,18 @@ export function useAtRisk(horizon = 10, limit = 4): Prediction[] {
   const predictions = useLive((s) => s.predictions);
   const states = useLive((s) => s.states);
   return useMemo(() => {
-    if (!predictions) return [];
-    return predictions.predictions
-      .filter((p) => p.horizon_min === horizon)
-      .filter((p) => LEVEL_RANK[p.predicted_level] > LEVEL_RANK[states[p.segment_id]?.level ?? 'no_data'] || (p.risk >= 0.5 && p.expected_change_kph <= -2))
-      .sort((a, b) => b.risk - a.risk || a.expected_change_kph - b.expected_change_kph)
-      .slice(0, limit);
+    const now: Record<string, SegmentLevel> = {};
+    for (const id in states) now[id] = states[id].level;
+    return pickAtRisk(predictions?.predictions ?? null, now, horizon, limit);
   }, [predictions, states, horizon, limit]);
+}
+
+/** The same rule without the store: the landing feeds it its corridors. */
+export function pickAtRisk(predictions: Prediction[] | null, now: Record<string, SegmentLevel>, horizon = 10, limit = 4): Prediction[] {
+  if (!predictions) return [];
+  return predictions
+    .filter((p) => p.horizon_min === horizon)
+    .filter((p) => LEVEL_RANK[p.predicted_level] > LEVEL_RANK[now[p.segment_id] ?? 'no_data'] || (p.risk >= 0.5 && p.expected_change_kph <= -2))
+    .sort((a, b) => b.risk - a.risk || a.expected_change_kph - b.expected_change_kph)
+    .slice(0, limit);
 }

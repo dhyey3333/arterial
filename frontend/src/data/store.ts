@@ -203,6 +203,9 @@ interface LiveActions {
   receive: <K extends StreamEventType>(type: K, payload: StreamEventMap[K], id: string | null) => void;
   setConnection: (info: ConnectionInfo) => void;
   reset: () => void;
+  /** Set by the console: load the network and open the stream. The landing never needs the whole network. */
+  wanted: boolean;
+  want: () => void;
 }
 
 export const useLive = create<LiveData & LiveActions>()((set) => ({
@@ -238,4 +241,6 @@ export const useLive = create<LiveData & LiveActions>()((set) => ({
       };
     }),
   reset: () => set({ ...initialLiveData }),
+  wanted: false,
+  want: () => set({ wanted: true }),
 }));

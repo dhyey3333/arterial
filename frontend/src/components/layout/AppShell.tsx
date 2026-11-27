@@ -78,6 +78,8 @@ function Mark() {
 
 export function AppShell() {
   const { pathname } = useLocation();
+  // the console needs the network and the stream: start them (once) when any console page opens
+  useEffect(() => useLive.getState().want(), []);
   const source = useSource();
   const reduce = useReducedMotion();
   const current = NAV.find((n) => pathname.startsWith(n.to)) ?? null;
