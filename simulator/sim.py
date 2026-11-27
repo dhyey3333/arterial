@@ -317,12 +317,32 @@ class Simulator:
             node, last = e.to, e
         v.route, v.pos = route, 0.0
 
+    def scenario_nodes(self) -> list[str]:
+        """Junctions at the ends of the scenario's loaded segments and the roads feeding them."""
+        sc = self.traffic.scenario
+        if not sc:
+            return []
+        key = (sc["segment"], sc["start"])
+        if getattr(self, "_scn_key", None) != key:
+            segs = set(sc.get("core", {sc["segment"]})) | set(sc.get("upstream", ()))
+            nodes = {self.net.segments[s][end] for s in segs for end in ("from_node", "to_node")}
+            self._scn_nodes = [n for n in nodes if self.net.out.get(n)]
+            self._scn_key = key
+        return self._scn_nodes
+
     def new_trip(self, v: Vehicle) -> None:
         if self.net.region["kind"] == "national":
             self.wander(v)
             return
+        sc = self.traffic.scenario
         for _ in range(5):
             goal = self.rng.choice(self.net.node_ids)
+            # while a scenario runs, a share of trips heads through it, as traffic does into a queue that is
+            # forming: the goal is a junction beyond the far end of the loaded stretch
+            if sc and self.rng.random() < 0.35:
+                near = self.scenario_nodes()
+                if near:
+                    goal = self.rng.choice(near)
             if goal != v.node:
                 route = self.net.route(v.node, goal)
                 if route:

@@ -68,15 +68,17 @@ export function LandingDataProvider({ children }: { children: ReactNode }) {
     const d = q.data;
     if (!d) return { status: 'waiting', now: null, predictions: null, madeAt: null, model: null, system: null };
     const anyNow = Object.values(d.now).some((l) => l !== 'no_data');
+    // live while the last answer is recent: one slow poll should not flip the readout to "down"
+    const fresh = Date.now() - q.dataUpdatedAt < 35_000;
     return {
-      status: q.isError ? 'waiting' : 'live',
+      status: fresh ? 'live' : 'waiting',
       now: anyNow ? d.now : null,
       predictions: d.predictions.length ? d.predictions : null,
       madeAt: d.made_at,
       model: d.model,
       system: d.system,
     };
-  }, [live, q.data, q.isError, states, predictionSet, system]);
+  }, [live, q.data, q.dataUpdatedAt, states, predictionSet, system]);
 
   return <LandingContext.Provider value={value}>{children}</LandingContext.Provider>;
 }
