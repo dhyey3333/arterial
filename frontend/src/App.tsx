@@ -6,15 +6,43 @@ import { AppShell } from './components/layout/AppShell';
 import { LiveProvider } from './data/LiveProvider';
 import { createLiveSource, type DataSource } from './lib/api';
 import { API_URL, USE_FIXTURES } from './lib/config';
-import { CommandCenter } from './pages/CommandCenter';
+import Landing from './pages/Landing';
 
-const Traffic = lazy(() => import('./pages/Traffic'));
-const Forecast = lazy(() => import('./pages/Forecast'));
-const Incidents = lazy(() => import('./pages/Incidents'));
-const Routes = lazy(() => import('./pages/Routes'));
-const Analytics = lazy(() => import('./pages/Analytics'));
-const System = lazy(() => import('./pages/System'));
+const pages = {
+  console: () => import('./pages/CommandCenter').then((m) => ({ default: m.CommandCenter })),
+  traffic: () => import('./pages/Traffic'),
+  forecast: () => import('./pages/Forecast'),
+  incidents: () => import('./pages/Incidents'),
+  routes: () => import('./pages/Routes'),
+  analytics: () => import('./pages/Analytics'),
+  system: () => import('./pages/System'),
+};
+const CommandCenter = lazy(pages.console);
+const Traffic = lazy(pages.traffic);
+const Forecast = lazy(pages.forecast);
+const Incidents = lazy(pages.incidents);
+const Routes = lazy(pages.routes);
+const Analytics = lazy(pages.analytics);
+const System = lazy(pages.system);
 const NotFound = lazy(() => import('./pages/NotFound'));
+
+/**
+ * Page transitions stay smooth only if the next page is already here: once the
+ * first view has settled, fetch every page's code while the browser is idle, so
+ * a tab change swaps content in the same frame instead of flashing a blank view.
+ */
+function usePrefetchPages() {
+  useEffect(() => {
+    const run = () => Object.values(pages).forEach((load) => void load().catch(() => undefined));
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) {
+      const id = idle(run, { timeout: 4000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(run, 1500);
+    return () => clearTimeout(t);
+  }, []);
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -23,11 +51,12 @@ const queryClient = new QueryClient({
 const page = (el: React.ReactNode) => <Suspense fallback={<div className="page-loading" aria-busy="true" />}>{el}</Suspense>;
 
 const router = createBrowserRouter([
+  // the front door: what Arterial is, then into the console
+  { path: '/', element: <Landing /> },
   {
-    path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <CommandCenter /> },
+      { path: 'console', element: page(<CommandCenter />) },
       { path: 'traffic', element: page(<Traffic />) },
       { path: 'forecast', element: page(<Forecast />) },
       { path: 'incidents', element: page(<Incidents />) },
@@ -56,6 +85,7 @@ function useDataSource(): DataSource | null {
 
 export default function App() {
   const source = useDataSource();
+  usePrefetchPages();
   if (!source) return <div className="page-loading" aria-busy="true" />;
   return (
     <MotionConfig reducedMotion="user">

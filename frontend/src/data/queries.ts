@@ -3,6 +3,7 @@ import type {
   AnalyticsOverview,
   Incident,
   ModelInfo,
+  PlaceSearch,
   RouteRequest,
   RouteResponse,
   SegmentDetail,
@@ -27,6 +28,19 @@ export function useSegmentDetail(id: string | null, minutes = 60) {
     queryFn: ({ signal }) => source.get<SegmentDetail>(`/traffic/segments/${encodeURIComponent(id!)}?minutes=${minutes}`, signal),
     enabled: Boolean(id),
     staleTime: 30_000,
+  });
+}
+
+/** Places in the region matching `q` (two characters or more), for the route search. */
+export function usePlaces(q: string) {
+  const source = useSource();
+  const query = q.trim();
+  return useQuery({
+    queryKey: ['places', source.kind, query.toLowerCase()],
+    queryFn: ({ signal }) => source.get<PlaceSearch>(`/places?q=${encodeURIComponent(query)}&limit=8`, signal),
+    enabled: query.length >= 2,
+    staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
   });
 }
 

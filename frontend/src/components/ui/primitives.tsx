@@ -1,7 +1,9 @@
-import { animate, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { animate, useReducedMotion } from 'motion/react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Check,
   CircleAlert,
+  Copy,
   CircleCheck,
   CircleDashed,
   Info,
@@ -14,17 +16,31 @@ import { LEVEL_LABEL, SEVERITY_LABEL } from '../../lib/format';
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
-// ---------- Panel ----------
+// ---------- Page head ----------
 
-export function Panel({
+/** The page's own title row: an h1, one line on what the page answers, and its controls. */
+export function PageHead({ title, lede, children }: { title: string; lede?: ReactNode; children?: ReactNode }) {
+  return (
+    <header className="phead enter">
+      <div>
+        <h1 className="phead__title">{title}</h1>
+        {lede && <p className="phead__lede">{lede}</p>}
+      </div>
+      {children && <div className="phead__aside">{children}</div>}
+    </header>
+  );
+}
+
+// ---------- Section: a title over a hairline, no box ----------
+
+export function Section({
   title,
   meta,
   actions,
   children,
   className = '',
   enter,
-  id,
-  bodyClassName = '',
+  as: Tag = 'section',
 }: {
   title?: ReactNode;
   meta?: ReactNode;
@@ -33,32 +49,30 @@ export function Panel({
   className?: string;
   /** Entrance delay in ms; omit for no entrance. */
   enter?: number;
-  id?: string;
-  bodyClassName?: string;
+  as?: 'section' | 'div';
 }) {
   const headingId = useId();
   return (
-    <section
-      id={id}
-      className={`panel ${enter !== undefined ? 'enter' : ''} ${className}`}
+    <Tag
+      className={`sect ${enter !== undefined ? 'enter' : ''} ${className}`}
       style={enter !== undefined ? ({ '--i': enter } as React.CSSProperties) : undefined}
       aria-labelledby={title ? headingId : undefined}
     >
       {(title || actions) && (
-        <header className="panel__head">
-          <div className="panel__titles">
+        <header className="sect__head">
+          <div>
             {title && (
-              <h2 className="panel__title" id={headingId}>
+              <h2 className="sect__title" id={headingId}>
                 {title}
               </h2>
             )}
-            {meta && <p className="panel__meta">{meta}</p>}
+            {meta && <p className="sect__meta">{meta}</p>}
           </div>
-          {actions && <div className="panel__actions">{actions}</div>}
+          {actions && <div className="sect__actions">{actions}</div>}
         </header>
       )}
-      <div className={`panel__body ${bodyClassName}`}>{children}</div>
-    </section>
+      {children}
+    </Tag>
   );
 }
 
@@ -80,6 +94,7 @@ export function AnimatedNumber({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const prev = useRef<number | null>(value);
+  const shown = useRef<number | null>(value);
   const [initial] = useState(() => format(value));
   const reduce = useReducedMotion();
   const formatRef = useRef(format);
@@ -88,16 +103,19 @@ export function AnimatedNumber({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const from = prev.current;
+    // Start from what is on screen, so an update that lands mid-tween continues instead of jumping.
+    const from = shown.current;
     prev.current = value;
     if (value === null || from === null || reduce || from === value) {
+      shown.current = value;
       el.textContent = formatRef.current(value);
       return;
     }
     const controls = animate(from, value, {
-      duration: 0.32,
+      duration: 0.26,
       ease: EASE_OUT,
       onUpdate: (v) => {
+        shown.current = v;
         el.textContent = formatRef.current(v);
       },
     });
@@ -204,19 +222,39 @@ export function Segmented<T extends string | number>({
   value,
   onChange,
   label,
+  className = '',
 }: {
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; extra?: ReactNode }[];
   value: T;
   onChange: (v: T) => void;
   label: string;
+  className?: string;
 }) {
   const name = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLSpanElement>(null);
+  const extras = options.map((o) => (typeof o.extra === 'object' ? '' : String(o.extra ?? ''))).join();
+  useIndicator(
+    rootRef,
+    thumbRef,
+    (active, thumb) => {
+      if (!active) {
+        thumb.style.opacity = '0';
+        return;
+      }
+      thumb.style.opacity = '1';
+      thumb.style.width = `${active.offsetWidth}px`;
+      thumb.style.transform = `translateX(${active.offsetLeft}px)`;
+    },
+    [value, options.length, extras],
+  );
   return (
-    <div className="segmented" role="radiogroup" aria-label={label}>
+    <div ref={rootRef} className={`segmented ${className}`} role="radiogroup" aria-label={label}>
+      <span ref={thumbRef} className="segmented__thumb" aria-hidden="true" />
       {options.map((o) => {
         const active = o.value === value;
         return (
-          <label key={String(o.value)} className={`segmented__option ${active ? 'is-active' : ''}`}>
+          <label key={String(o.value)} className={`segmented__option ${active ? 'is-active' : ''}`} data-active={active}>
             <input
               type="radio"
               className="visually-hidden"
@@ -224,14 +262,10 @@ export function Segmented<T extends string | number>({
               checked={active}
               onChange={() => onChange(o.value)}
             />
-            {active && (
-              <motion.span
-                layoutId={`${name}-thumb`}
-                className="segmented__thumb"
-                transition={{ type: 'tween', duration: 0.18, ease: EASE_OUT }}
-              />
-            )}
-            <span className="segmented__text">{o.label}</span>
+            <span className="segmented__text">
+              {o.label}
+              {o.extra}
+            </span>
           </label>
         );
       })}
@@ -275,6 +309,42 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
+// ---------- Copy an id ----------
+
+/** An id you can copy with one click; the icon swaps to a tick for a moment as confirmation. */
+export function CopyId({ value, label = 'id' }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <span className="copyid-wrap">
+      <button
+        type="button"
+        className={`copyid ${copied ? 'is-copied' : ''}`}
+        aria-label={`Copy ${label} ${value}`}
+        onClick={() => {
+          void navigator.clipboard
+            ?.writeText(value)
+            .then(() => setCopied(true))
+            .catch(() => undefined);
+        }}
+      >
+        <span className="mono">{value}</span>
+        <span className="copyid__icons" aria-hidden="true">
+          <Copy size={12} className="copyid__copy" />
+          <Check size={12} className="copyid__check" />
+        </span>
+      </button>
+      <span className="visually-hidden" aria-live="polite">
+        {copied ? `Copied ${value}` : ''}
+      </span>
+    </span>
+  );
+}
+
 // ---------- Small helpers ----------
 
 export function KeyValue({ items }: { items: { k: string; v: ReactNode }[] }) {
@@ -288,6 +358,66 @@ export function KeyValue({ items }: { items: { k: string; v: ReactNode }[] }) {
       ))}
     </dl>
   );
+}
+
+/**
+ * Places a sliding indicator (a tab underline, a segmented thumb) under the
+ * element marked data-active="true" inside `containerRef`. The move is a CSS
+ * transition on transform, so it stays smooth on the compositor while a new
+ * page or map is loading on the main thread. The first placement and any
+ * resize snap without a transition.
+ */
+export function useIndicator(
+  containerRef: React.RefObject<HTMLElement | null>,
+  indicatorRef: React.RefObject<HTMLElement | null>,
+  place: (active: HTMLElement | null, indicator: HTMLElement) => void,
+  deps: unknown[],
+) {
+  const placed = useRef(false);
+  const placeRef = useRef(place);
+  placeRef.current = place;
+  const run = useCallback(
+    (animate: boolean) => {
+      const root = containerRef.current;
+      const ind = indicatorRef.current;
+      if (!root || !ind) return;
+      const active = root.querySelector<HTMLElement>('[data-active="true"]');
+      if (!animate) ind.style.transition = 'none';
+      placeRef.current(active, ind);
+      if (!animate) {
+        void ind.offsetWidth; // commit the snap before transitions come back
+        ind.style.transition = '';
+      }
+    },
+    [containerRef, indicatorRef],
+  );
+  useLayoutEffect(() => {
+    run(placed.current);
+    placed.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => run(false));
+    ro.observe(root);
+    root.querySelectorAll('[data-active]').forEach((el) => ro.observe(el));
+    void document.fonts?.ready.then(() => run(false));
+    return () => ro.disconnect();
+  }, [run, containerRef]);
+}
+
+export function useMediaQuery(query: string): boolean {
+  const [match, setMatch] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setMatch(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return match;
 }
 
 export function useNow(intervalMs = 1000): number {

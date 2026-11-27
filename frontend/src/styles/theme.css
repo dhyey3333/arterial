@@ -1,0 +1,120 @@
+/*
+ * The finish, for the whole console.
+ *
+ * One signature, off-white, and only where it means something: the main action, what is selected or
+ * switched on, the live state. Nothing glows: depth comes from surface steps and hairlines. Panels are
+ * dark glass lit from above, so the map and the ground show through. Times, ids and the stream's status
+ * are set in mono; headings stay plain sans, because an operator reads them a hundred times a shift.
+ */
+
+/* ---------- shell ---------- */
+
+.app {
+  background: var(--ground);
+}
+
+.bar {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  background: rgba(9, 9, 9, 0.72);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+.brand__mark {
+  border-radius: 7px;
+}
+
+.tabs__link {
+  border-radius: var(--r-pill);
+  padding: 0 12px;
+}
+
+.tabs__link.is-active {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* the current tab: a short bar of the signature off-white under it */
+.tabs__ind {
+  background: var(--accent);
+}
+
+/* the stream's status, in mono, like a system readout */
+.source,
+.clock,
+.pill {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+
+.source {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pill {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.pill--live .pill__dot {
+  background: var(--accent);
+}
+
+.pill--live .pill__dot::after {
+  border-color: var(--accent);
+}
+
+/* ---------- glass ---------- */
+
+.float {
+  border-radius: var(--r-xl);
+  background: var(--glass-sheen), var(--glass);
+}
+
+/* ---------- actions ---------- */
+
+.btn {
+  border-radius: var(--r-pill);
+}
+
+.btn--icon {
+  border-radius: var(--r-md);
+}
+
+.btn--accent {
+  background: var(--accent);
+  /* depth from a soft top highlight, not a glow */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: var(--accent-ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn--accent:hover:not(:disabled) {
+    background: var(--accent-strong);
+  }
+}
+
+/* what is on and what is chosen take the signature colour */
+.toggle input:checked + .toggle__track {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle__track .toggle__thumb {
+  background: var(--accent-ink);
+}
+
+.tag--accent {
+  color: var(--accent);
+}
+
+.row.is-selected {
+  background: var(--accent-wash);
+}
+
+/* ---------- motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs__ind {
+    transition: none;
+  }
+}

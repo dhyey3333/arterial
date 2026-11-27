@@ -16,12 +16,29 @@ export type CongestionLevel = 'free' | 'moderate' | 'heavy' | 'severe';
 export type SegmentLevel = CongestionLevel | 'no_data';
 export type Trend = 'improving' | 'stable' | 'worsening';
 export type VehicleType = 'car' | 'two_wheeler' | 'auto_rickshaw' | 'bus' | 'truck';
-export type RoadClass = 'trunk' | 'primary' | 'secondary' | 'tertiary';
+export type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary';
 export type LngLat = [number, number];
 
 export const LEVELS: CongestionLevel[] = ['free', 'moderate', 'heavy', 'severe'];
 
 // ---------- Road network ----------
+
+/**
+ * The region a network covers: the national tier (all of India's expressways and national
+ * highways) or one city in street-level detail. One API process serves one region
+ * (docs/ARCHITECTURE.md, section 2.1).
+ */
+export interface RegionInfo {
+  /** Short id that prefixes every node and segment id, e.g. "in" or "blr". */
+  id: string;
+  kind: 'national' | 'city';
+  name: string;
+  /** [west, south, east, north] of the network. */
+  bbox: [number, number, number, number];
+  timezone: string;
+  /** Share of all traffic the simulated vehicles stand for: 1 in a city, 0.05 on the national tier. */
+  probe_share: number;
+}
 
 export interface RoadNode {
   id: string;
@@ -45,10 +62,36 @@ export interface RoadSegment {
 }
 
 export interface RoadNetwork {
+  region: RegionInfo;
   /** Where the road shapes came from, shown in the map attribution. */
   source: string;
   nodes: RoadNode[];
   segments: RoadSegment[];
+}
+
+/**
+ * One match from GET /places, always tied to a junction so it is ready for a route request.
+ * A junction matches by its own name or a road meeting there; on the national tier a town or
+ * village matches by name and is snapped to its nearest highway junction.
+ */
+export interface PlaceResult {
+  kind: 'junction' | 'place';
+  name: string;
+  /** For a place, its district or state when OSM has it. */
+  context: string | null;
+  lng: number;
+  lat: number;
+  node_id: string;
+  /** Names of the roads that meet at that junction. */
+  roads: string[];
+  /** From the place to the junction it was snapped to; 0 for a junction. */
+  distance_m: number;
+}
+
+export interface PlaceSearch {
+  query: string;
+  region: string;
+  places: PlaceResult[];
 }
 
 // ---------- Live segment state (one closed window per segment) ----------
@@ -170,6 +213,8 @@ export interface ModelEvaluation {
 export interface ModelInfo {
   name: string;
   version: string;
+  /** Id of the region the model was trained and evaluated on. */
+  region: string;
   kind: 'rule_baseline' | 'trained';
   description: string;
   trained_at: string | null;

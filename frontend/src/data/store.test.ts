@@ -130,6 +130,7 @@ describe('applySnapshot', () => {
   it('indexes segments, states and incidents and sorts alerts newest first', () => {
     const d = applySnapshot(initialLiveData, {
       network: {
+        region: { id: 'tst', kind: 'city', name: 'Test City', bbox: [0, 0, 1, 1], timezone: 'Asia/Kolkata', probe_share: 1 },
         source: 'test',
         nodes: [],
         segments: [{ id: 'S1', name: 'Road', road_class: 'primary', from_node: 'A', to_node: 'B', length_m: 1000, speed_limit_kph: 50, free_flow_kph: 40, lanes: 2, geometry: [[0, 0], [1, 1]] }],

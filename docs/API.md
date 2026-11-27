@@ -7,12 +7,17 @@ agree. The server is built during the build window (28-29 Nov 2026 IST).
 
 All traffic data comes from **simulated** telemetry.
 
+One API process serves one region, set by `ARTERIAL_REGION` (ARCHITECTURE.md, section 2.1): the
+national tier (`in`) or a city (`blr`). Node and segment ids start with the region id, for example
+`blr-ORR-03`, `in-NH44-0123` and `blr-N00004`. The design fixtures in `frontend/` keep their short
+ids (`ORR-03`, `N04`).
+
 ## Errors
 
 Every non-2xx response:
 
 ```json
-{ "error": { "code": "segment_not_found", "message": "No segment ORR-09.", "request_id": "c1f3…" } }
+{ "error": { "code": "segment_not_found", "message": "No segment blr-ORR-09.", "request_id": "c1f3…" } }
 ```
 
 | Status | Codes |
@@ -28,22 +33,23 @@ Every non-2xx response:
 | Method | Path | Returns | Notes |
 |---|---|---|---|
 | GET | `/health` | `{ "status": "ok" }` | Liveness only |
-| GET | `/network` | `RoadNetwork` | Nodes and segments with geometry |
+| GET | `/network` | `RoadNetwork` | The region (`RegionInfo`), nodes and segments with geometry |
+| GET | `/places` | `PlaceSearch` | `?q=silk board&limit=8`. Junctions whose name, or a road meeting there, matches; on the national tier also towns and villages, snapped to their nearest highway junction. Empty list when nothing in this region matches |
 | GET | `/traffic/segments` | `{ as_of, window_s, states: SegmentState[] }` | Latest closed window per segment |
 | GET | `/traffic/segments/{id}` | `SegmentDetail` | `?minutes=60` of window history |
 | GET | `/traffic/summary` | `NetworkSummary` | |
 | GET | `/traffic/history` | `TrafficHistory` | `?minutes=60` (max 1440) |
 | GET | `/alerts` | `{ alerts: CongestionAlert[] }` | `?status=active\|all&limit=50` |
 | GET | `/predictions` | `PredictionSet` | `?horizon=5\|10\|15` filters `predictions` |
-| GET | `/predictions/model` | `ModelInfo` | Evaluation per horizon beside persistence |
+| GET | `/predictions/model` | `ModelInfo` | Evaluation per horizon beside persistence, and the region it was evaluated on |
 | GET | `/incidents` | `{ incidents: Incident[] }` | `?status=active\|resolved\|all&severity=&since=&limit=` |
 | GET | `/incidents/{id}` | `Incident` | Includes timeline |
-| POST | `/routes` | `RouteResponse` | Body `RouteRequest`: `{ "origin": "N04", "destination": "N10" }` |
+| POST | `/routes` | `RouteResponse` | Body `RouteRequest`: `{ "origin": "blr-N00004", "destination": "blr-N00010" }`, junction ids from `/network` or `/places` |
 | GET | `/analytics/overview` | `AnalyticsOverview` | `?days=7` |
 | GET | `/system/status` | `SystemStatus` | |
 | GET | `/system/throughput` | `{ points: ThroughputPoint[] }` | `?minutes=15`, 10 s resolution |
 | GET | `/stream` | Server-Sent Events | See below |
-| POST | `/sim/scenario` | `{ scenario, applied_at }` | Simulator only. Body `{ "scenario": "incident", "segment_id": "ORR-03" }`. Never touches real infrastructure. |
+| POST | `/sim/scenario` | `{ scenario, applied_at }` | Simulator only. Body `{ "scenario": "incident", "segment_id": "blr-ORR-03" }`. Never touches real infrastructure. |
 
 ## Live stream
 

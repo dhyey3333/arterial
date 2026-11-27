@@ -1,5 +1,6 @@
-import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { useReducedMotion } from 'motion/react';
+import { useEffect, useRef } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import {
   Activity,
   ChartColumn,
@@ -14,34 +15,38 @@ import {
 import { useLive } from '../../data/store';
 import { useSource } from '../../data/LiveProvider';
 import { fmtAgo, fmtTime } from '../../lib/format';
-import { useNow } from '../ui/primitives';
+import { useIndicator, useNow } from '../ui/primitives';
+import { IncidentNotifier } from '../IncidentNotifier';
+import { BrandMark } from '../BrandMark';
 
 interface NavItem {
   to: string;
   label: string;
-  title: string;
-  lede: string;
   icon: LucideIcon;
+  /** Map and inbox views fill the screen and scroll inside their own columns. */
+  fill?: boolean;
 }
 
 export const NAV: NavItem[] = [
-  { to: '/', label: 'Command center', title: 'Command center', lede: 'Live conditions, alerts and what slows next.', icon: Radar },
-  { to: '/traffic', label: 'Traffic', title: 'Traffic', lede: 'Speed, density and flow on every segment, from the latest 30-second window.', icon: Activity },
-  { to: '/forecast', label: 'Forecast', title: 'Forecast', lede: 'Where traffic is likely to slow in the next 5 to 15 minutes, and how sure the model is.', icon: TrendingUp },
-  { to: '/incidents', label: 'Incidents', title: 'Incidents', lede: 'Abnormal patterns found in the simulated stream, with the evidence for each.', icon: TriangleAlert },
-  { to: '/routes', label: 'Routes', title: 'Routes', lede: 'The fastest path under current conditions, against the usual route.', icon: Route },
-  { to: '/analytics', label: 'Analytics', title: 'Analytics', lede: 'Peaks, problem corridors and reliability across the stored simulated history.', icon: ChartColumn },
-  { to: '/system', label: 'System', title: 'System', lede: 'The Condense pipeline, Kafka, and this browser’s live stream.', icon: Server },
+  { to: '/console', label: 'Command center', icon: Radar, fill: true },
+  { to: '/traffic', label: 'Traffic', icon: Activity },
+  { to: '/forecast', label: 'Forecast', icon: TrendingUp, fill: true },
+  { to: '/incidents', label: 'Incidents', icon: TriangleAlert, fill: true },
+  { to: '/routes', label: 'Routes', icon: Route, fill: true },
+  { to: '/analytics', label: 'Analytics', icon: ChartColumn },
+  { to: '/system', label: 'System', icon: Server },
 ];
-
-const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
 function StreamPill() {
   const conn = useLive((s) => s.connection);
+  const source = useSource();
   const now = useNow(1000);
   const label =
     conn.state === 'live'
-      ? 'Live'
+      ? // the design fixtures stream sample data: "Live" beside the fixtures banner would contradict it
+        source.kind === 'fixtures'
+        ? 'Sample stream'
+        : 'Live'
       : conn.state === 'connecting'
         ? 'Connecting'
         : conn.state === 'reconnecting'
@@ -61,95 +66,112 @@ function StreamPill() {
 function Clock() {
   const now = useNow(1000);
   return (
-    <span className="topbar__clock num" aria-label="Time in Bengaluru">
+    <span className="clock num" aria-label="Time in India">
       {fmtTime(now)} <span className="muted">IST</span>
     </span>
   );
+}
+
+function Mark() {
+  return <BrandMark className="brand__mark" />;
 }
 
 export function AppShell() {
   const { pathname } = useLocation();
   const source = useSource();
   const reduce = useReducedMotion();
-  const current = NAV.find((n) => (n.to === '/' ? pathname === '/' : pathname.startsWith(n.to))) ?? NAV[0];
-  const segments = useLive((s) => s.network?.segments.length ?? 0);
+  const current = NAV.find((n) => pathname.startsWith(n.to)) ?? null;
+  const incidents = useLive((s) => s.incidents);
+  const activeIncidents = Object.values(incidents).filter((i) => i.status === 'active').length;
+  // the region the API serves: a city, or the national tier
+  const region = useLive((s) => s.network?.region?.name) ?? '';
+  const tabsRef = useRef<HTMLElement>(null);
+  const indRef = useRef<HTMLSpanElement>(null);
+
+  // The underline is one element moved with transform: a 100px bar scaled to the tab's width.
+  useIndicator(
+    tabsRef,
+    indRef,
+    (active, ind) => {
+      if (!active) {
+        ind.style.opacity = '0';
+        return;
+      }
+      ind.style.opacity = '1';
+      ind.style.transform = `translateX(${active.offsetLeft + 10}px) scaleX(${(active.offsetWidth - 20) / 100})`;
+    },
+    [current?.to, activeIncidents > 0],
+  );
+
+  // On a narrow screen the tab row scrolls: keep the current tab in view.
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>('.tabs__link.is-active');
+    const row = el?.closest<HTMLElement>('.tabs');
+    if (!el || !row || row.scrollWidth <= row.clientWidth) return;
+    row.scrollTo({ left: el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2, behavior: reduce ? 'auto' : 'smooth' });
+  }, [pathname, reduce]);
 
   return (
-    <div className="shell">
+    <div className="app">
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="rail" aria-label="Main">
-        <div className="rail__brand">
-          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
-            <rect width="32" height="32" rx="8" fill="#121821" />
-            <path d="M7 23c4-1 6-4 8-8s5-7 10-8" fill="none" stroke="#4c9dff" strokeWidth="3" strokeLinecap="round" />
-            <circle cx="25" cy="7" r="3" fill="#3fd4e4" />
-          </svg>
-          <div>
-            <p className="rail__name">Arterial</p>
-            <p className="rail__tag">Traffic intelligence</p>
-          </div>
+      {source.kind === 'fixtures' && (
+        <div className="strip" role="note">
+          <FlaskConical size={14} aria-hidden="true" />
+          <span>
+            <strong>Design fixtures.</strong>{' '}
+            <span className="strip__long">Hand-written sample data for building this interface. Not live, and not output from the simulator or any model.</span>
+            <span className="strip__short">Hand-written sample data. Not live, not from the simulator or any model.</span>
+          </span>
         </div>
-        <nav className="rail__nav">
-          <LayoutGroup id="nav">
-            <ul>
-              {NAV.map((item) => {
-                const active = item === current;
-                const Icon = item.icon;
-                return (
-                  <li key={item.to}>
-                    <NavLink to={item.to} end={item.to === '/'} className={`rail__link ${active ? 'is-active' : ''}`}>
-                      {active && (
-                        <motion.span
-                          layoutId="nav-active"
-                          className="rail__active"
-                          transition={reduce ? { duration: 0 } : { type: 'tween', duration: 0.18, ease: EASE_OUT }}
-                        />
-                      )}
-                      <Icon size={17} aria-hidden="true" className="rail__icon" />
-                      <span className="rail__label">{item.label}</span>
-                    </NavLink>
-                  </li>
-                );
-              })}
-            </ul>
-          </LayoutGroup>
+      )}
+      <header className="bar">
+        <Link to="/" viewTransition className="brand" aria-label="Arterial home">
+          <Mark />
+          <span className="brand__name">Arterial</span>
+          {region && (
+            <>
+              <span className="brand__sep" aria-hidden="true">
+                /
+              </span>
+              <span className="brand__area">{region}</span>
+            </>
+          )}
+        </Link>
+        <nav className="tabs" aria-label="Main" ref={tabsRef}>
+          <ul className="tabs__list">
+            {NAV.map((item) => {
+              const active = item === current;
+              const Icon = item.icon;
+              return (
+                <li key={item.to}>
+                  <NavLink to={item.to} className={`tabs__link ${active ? 'is-active' : ''}`} data-active={active}>
+                    <Icon size={15} aria-hidden="true" />
+                    {item.label}
+                    {item.to === '/incidents' && activeIncidents > 0 && (
+                      <span key={activeIncidents} className="tabs__count num" aria-label={`${activeIncidents} active`}>
+                        {activeIncidents}
+                      </span>
+                    )}
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+          <span ref={indRef} className="tabs__ind" aria-hidden="true" />
         </nav>
-        <div className="rail__foot">
-          <p className="rail__area">
-            South-east Bengaluru
-            <span className="muted">{segments ? ` · ${segments} segments` : ''}</span>
-          </p>
-          <p className="rail__note muted">Simulated telemetry. Never connected to real vehicles or signals.</p>
+        <div className="bar__status">
+          {/* the fixtures banner already says where the data comes from; a real API names itself here */}
+          {source.kind !== 'fixtures' && <span className="source">{source.label}</span>}
+          <Clock />
+          <StreamPill />
         </div>
-      </aside>
-
-      <div className="shell__main">
-        {source.kind === 'fixtures' && (
-          <div className="fixture-banner" role="note">
-            <FlaskConical size={15} aria-hidden="true" />
-            <span>
-              <strong>Design fixtures.</strong> Hand-written sample data for building this interface. Not live, and not output
-              from the simulator or any model.
-            </span>
-          </div>
-        )}
-        <header className="topbar">
-          <div className="topbar__titles">
-            <h1 className="topbar__title">{current.title}</h1>
-            <p className="topbar__lede">{current.lede}</p>
-          </div>
-          <div className="topbar__status">
-            <span className="tag">{source.label}</span>
-            <Clock />
-            <StreamPill />
-          </div>
-        </header>
-        <main id="main" className="page" key={pathname}>
-          <Outlet />
-        </main>
-      </div>
+      </header>
+      <main id="main" className={`view ${current?.fill ? 'view--fill' : ''}`} key={pathname.startsWith('/incidents') ? '/incidents' : pathname}>
+        <Outlet />
+      </main>
+      <IncidentNotifier />
     </div>
   );
 }

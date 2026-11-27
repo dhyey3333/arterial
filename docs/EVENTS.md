@@ -3,6 +3,8 @@
 All topics live on the Condense-managed Kafka cluster and start with the team prefix the organizers
 confirm with our login (shown here as `<prefix>`). Values are UTF-8 JSON. Keys are the road
 segment id, so every event for a segment lands on one partition and stays in order for windowing.
+Segment ids start with the region id (`blr-ORR-03`, `in-NH44-0123`), so the national tier and every
+city share these topics without a collision (ARCHITECTURE.md, section 2.1).
 Everything here is built during the build window.
 
 ## Topics
@@ -34,7 +36,8 @@ kickoff.
   "lng": 77.623010,
   "speed_kph": 23.4,
   "heading_deg": 87.0,
-  "road_segment_id": "ORR-03",
+  "region": "blr",
+  "road_segment_id": "blr-ORR-03",
   "seq": 1834,
   "source": "simulated",
   "sim_run_id": "run-2026-11-28-01"
@@ -47,10 +50,11 @@ kickoff.
 | `vehicle_id` | string | required, `SIM-` prefix |
 | `vehicle_type` | enum | `car`, `two_wheeler`, `auto_rickshaw`, `bus`, `truck` |
 | `ts` | ISO 8601 | required; more than 2 minutes in the future rejected |
-| `lat`, `lng` | number | required; inside the network bounding box plus 1 km |
+| `lat`, `lng` | number | required; inside the region network's bounding box plus 1 km |
 | `speed_kph` | number | 0 to 160 |
 | `heading_deg` | number | 0 to 360 |
-| `road_segment_id` | string | must exist in the network |
+| `region` | string | a configured region id |
+| `road_segment_id` | string | must exist in that region's network |
 | `seq` | integer | per-vehicle counter; a lower `seq` than the last seen marks the event out-of-order (kept, flagged) |
 | `source` | string | must be `"simulated"` |
 
@@ -65,8 +69,8 @@ The original event (or the raw string if it was not JSON) plus:
 { "rejected_at": "2026-11-28T10:15:30.410Z", "reason": "missing_gps", "detail": "lat is null" }
 ```
 
-Reasons: `invalid_json`, `schema`, `missing_gps`, `out_of_bounds`, `speed_range`, `unknown_segment`,
-`future_timestamp`, `duplicate`.
+Reasons: `invalid_json`, `schema`, `missing_gps`, `out_of_bounds`, `speed_range`, `unknown_region`,
+`unknown_segment`, `future_timestamp`, `duplicate`.
 
 ## `segment-metrics`, `arterial.segment-metrics.v1`
 

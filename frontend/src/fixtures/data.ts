@@ -178,6 +178,7 @@ export function summaryOf(states: SegmentState[], asOf: Date, eventsPerS: number
 export const MODEL: ModelInfo = {
   name: 'congestion-forecast',
   version: 'fixture',
+  region: 'blr',
   kind: 'rule_baseline',
   description: 'Design fixture. Sample numbers for layout only; the real model card comes from the API.',
   trained_at: null,

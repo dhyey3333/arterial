@@ -17,7 +17,27 @@ export function Drawer({ open, onClose, label, children }: { open: boolean; onCl
     returnTo.current = document.activeElement as HTMLElement | null;
     const t = setTimeout(() => panelRef.current?.focus(), 0);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      // Keep Tab inside the sheet while it is open, as a modal dialog should.
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const items = [
+        ...panelRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+      ].filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === panelRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => {

@@ -15,7 +15,7 @@ body {
   background: var(--ground);
   color: var(--ink-1);
   font-family: var(--font-sans);
-  font-size: var(--text-md);
+  font-size: var(--t-14);
   line-height: 1.5;
   font-feature-settings: 'ss01', 'cv11';
   -webkit-font-smoothing: antialiased;
@@ -27,16 +27,25 @@ h1,
 h2,
 h3,
 h4,
-p {
+p,
+dl,
+dd,
+figure {
   margin: 0;
 }
 
 h1,
 h2,
-h3 {
-  font-weight: 600;
+h3,
+h4 {
+  font-weight: 500;
   letter-spacing: -0.015em;
   line-height: 1.2;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
 }
 
 button,
@@ -45,6 +54,14 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+a,
+button,
+label,
+select {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 a {
@@ -68,7 +85,7 @@ svg {
 }
 
 ::selection {
-  background: rgba(76, 157, 255, 0.35);
+  background: rgba(242, 242, 243, 0.3);
 }
 
 :focus-visible {
@@ -84,7 +101,7 @@ svg {
 
 .mono {
   font-family: var(--font-mono);
-  font-size: 0.92em;
+  font-size: 0.9em;
   letter-spacing: -0.01em;
 }
 
@@ -98,6 +115,26 @@ svg {
 
 .soft {
   color: var(--ink-2);
+}
+
+.small {
+  font-size: var(--t-12);
+}
+
+.block {
+  display: block;
+}
+
+.good {
+  color: var(--good);
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.warn {
+  color: var(--warn);
 }
 
 .visually-hidden {
@@ -121,21 +158,21 @@ svg {
   border-radius: var(--r-sm);
   background: var(--accent);
   color: var(--accent-ink);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
-  transform: translateY(-160%);
+  transform: translateY(-200%);
 }
 
 .skip-link:focus-visible {
   transform: none;
 }
 
-/* ---------- entrance: one per page, non-uniform stagger ---------- */
+/* ---------- entrance: once per view, a short non-uniform stagger ---------- */
 
 @keyframes enter-rise {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(4px);
   }
 }
 
@@ -145,38 +182,56 @@ svg {
   }
 }
 
+/* Views are opened tens of times a day: a short rise, and a stagger that never passes ~150ms. */
 .enter {
-  animation: enter-rise 320ms var(--ease-out) both;
-  animation-delay: calc(var(--i, 0) * 1ms);
+  animation: enter-rise 240ms var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 250) * 0.6ms);
+}
+
+/* A list whose content was replaced (a new forecast horizon): a quick settle, not a full entrance. */
+.swap-in {
+  animation: swap-in 180ms var(--ease-out) both;
+}
+
+@keyframes swap-in {
+  from {
+    opacity: 0.35;
+    transform: translateY(3px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .enter {
+  .enter,
+  .swap-in {
     animation-name: enter-fade;
-    animation-duration: 200ms;
+    animation-duration: 160ms;
   }
 }
 
 /* ---------- buttons ---------- */
 
 .btn {
+  user-select: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
   min-height: 36px;
-  padding: 0 var(--s-4);
-  border: 1px solid var(--hairline-strong);
+  padding: 0 16px;
+  border: 0;
   border-radius: var(--r-sm);
   background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--ink-1);
-  font-size: var(--text-sm);
+  font-size: var(--t-13);
   font-weight: 500;
   white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
   transition:
     background-color var(--dur-fast) ease,
-    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    color var(--dur-fast) ease,
     transform var(--dur-press) var(--ease-out);
 }
 
@@ -186,25 +241,37 @@ svg {
 
 .btn:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .btn--primary {
-  border-color: transparent;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
+  background: var(--ink-1);
+  box-shadow: none;
+  color: #0b0b0b;
+  font-weight: 500;
+}
+
+.btn--accent {
+  background: var(--accent-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-weight: 500;
 }
 
 .btn--ghost {
-  border-color: transparent;
   background: transparent;
+  box-shadow: none;
   color: var(--ink-2);
 }
 
 .btn--icon {
-  width: 36px;
+  width: 34px;
   padding: 0;
+}
+
+.btn--block {
+  width: 100%;
+  min-height: 40px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -212,7 +279,10 @@ svg {
     background: var(--surface-4);
   }
   .btn--primary:hover:not(:disabled) {
-    background: #66abff;
+    background: #ffffff;
+  }
+  .btn--accent:hover:not(:disabled) {
+    background: var(--accent-strong);
   }
   .btn--ghost:hover:not(:disabled) {
     background: var(--surface-3);
@@ -220,18 +290,44 @@ svg {
   }
 }
 
+/* ---------- text links ---------- */
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: var(--r-xs);
+  transition: color var(--dur-fast) ease;
+}
+
+.link svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link:hover {
+    color: var(--ink-1);
+  }
+  .link:hover svg {
+    transform: translateX(2px);
+  }
+}
+
 /* ---------- form fields ---------- */
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .field__label {
-  color: var(--ink-2);
-  font-size: var(--text-xs);
+  color: var(--ink-3);
+  font-size: var(--t-12);
   font-weight: 500;
-  letter-spacing: 0.02em;
 }
 
 .select,
@@ -239,27 +335,43 @@ svg {
   width: 100%;
   min-height: 40px;
   padding: 0 var(--s-3);
-  border: 1px solid var(--hairline-strong);
+  border: 0;
   border-radius: var(--r-sm);
   background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--ink-1);
-  font-size: var(--text-md);
-  transition: border-color var(--dur-fast) ease;
+  font-size: var(--t-14);
+  transition:
+    box-shadow var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
 }
 
 .select {
   appearance: none;
   padding-right: 36px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a3afbf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a9adb5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
+  cursor: pointer;
+}
+
+.select option {
+  background: var(--surface-2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .select:hover,
+  .input:hover {
+    box-shadow: inset 0 0 0 1px var(--line-3);
+  }
 }
 
 .select:focus-visible,
 .input:focus-visible {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-wash);
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    0 0 0 3px var(--accent-wash);
 }
 
 .input::placeholder {

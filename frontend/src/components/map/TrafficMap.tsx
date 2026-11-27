@@ -6,27 +6,58 @@ import { Minus, Plus, Scan } from 'lucide-react';
 import type { Incident, LngLat, RoadNetwork, RoadNode, SegmentLevel } from '../../lib/contract';
 import { LEVEL_LABEL, LEVEL_RANK, fmtInt, fmtSpeed } from '../../lib/format';
 import { useLive } from '../../data/store';
-import { loadBasemap } from './basemap';
+import { FIRST_LABEL, loadBasemap } from './basemap';
 import { LevelSwatch } from '../ui/primitives';
-
-const LEVEL_RGB: Record<SegmentLevel, [number, number, number]> = {
-  free: [12, 163, 12],
-  moderate: [250, 178, 25],
-  heavy: [236, 131, 90],
-  severe: [208, 59, 59],
-  no_data: [74, 85, 102],
-};
-/** Width steps double the colour channel, because warning and serious sit close in hue. */
-const LEVEL_WIDTH: Record<SegmentLevel, number> = { no_data: 0.8, free: 1, moderate: 1.25, heavy: 1.55, severe: 1.9 };
-const LEVEL_OPACITY: Record<SegmentLevel, number> = { no_data: 0.7, free: 0.78, moderate: 1, heavy: 1, severe: 1 };
+import { LEVEL_OPACITY, LEVEL_RGB, LEVEL_WIDTH } from './levels';
 
 const easeInOut = cubicBezier(0.77, 0, 0.175, 1);
 const easeOut = cubicBezier(0.23, 1, 0.32, 1);
 const COLOR_MS = 600;
 
+/** A segment's look, eased as a whole when its level changes: colour, width, opacity, and the forecast's worse-than-now dashes. */
+interface Look {
+  rgb: [number, number, number];
+  w: number;
+  op: number;
+  wo: number;
+}
+
 export interface MapRoute {
   primary: LngLat[];
   compare?: LngLat[] | null;
+  /**
+   * The two trips played side by side once the route has drawn: each light takes screen time in
+   * proportion to its real ETA, so the faster route visibly arrives first. `run` changes to replay.
+   */
+  race?: { primaryEtaS: number; compareEtaS: number | null; run: number } | null;
+}
+
+/** A polyline measured once, so a point or a stretch at any share of its length is cheap to find. */
+function measure(coords: LngLat[]) {
+  const k = Math.cos(((coords[0]?.[1] ?? 0) * Math.PI) / 180);
+  const cum = [0];
+  for (let i = 1; i < coords.length; i++) {
+    const dx = (coords[i][0] - coords[i - 1][0]) * k;
+    const dy = coords[i][1] - coords[i - 1][1];
+    cum.push(cum[i - 1] + Math.hypot(dx, dy));
+  }
+  const total = cum[cum.length - 1] || 1;
+  const at = (f: number): LngLat => {
+    const d = Math.min(1, Math.max(0, f)) * total;
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < d) i++;
+    const seg = cum[i] - cum[i - 1] || 1;
+    const t = (d - cum[i - 1]) / seg;
+    return [coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t, coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t];
+  };
+  /** The stretch from share `a` to share `b`, with the vertices in between. */
+  const stretch = (a: number, b: number): LngLat[] => {
+    const out: LngLat[] = [at(a)];
+    for (let i = 1; i < cum.length - 1; i++) if (cum[i] / total > a && cum[i] / total < b) out.push(coords[i]);
+    out.push(at(b));
+    return out;
+  };
+  return { at, stretch };
 }
 
 export interface TrafficMapProps {
@@ -34,6 +65,8 @@ export interface TrafficMapProps {
   mode?: 'now' | 'forecast';
   horizon?: number;
   selectedSegment?: string | null;
+  /** A segment hovered in a list beside the map: it gets the same halo as a hover on the map. */
+  hoverSegment?: string | null;
   onSelectSegment?: (id: string | null) => void;
   showVehicles?: boolean;
   incidents?: Incident[];
@@ -71,16 +104,16 @@ function midpoint(geometry: LngLat[]): LngLat {
 
 const emptyFC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-/** Padding that still leaves room to fit the network on a small screen. */
+/**
+ * Padding that keeps the network clear of floating panels, scaled down on a
+ * small screen so at least 30% of the width and 40% of the height stay for roads.
+ */
 function fitPadding(el: HTMLElement, p: { top: number; right: number; bottom: number; left: number }) {
   const w = el.clientWidth || 800;
   const h = el.clientHeight || 600;
-  return {
-    top: Math.min(p.top, h * 0.22),
-    bottom: Math.min(p.bottom, h * 0.14),
-    left: Math.min(p.left, w * 0.08),
-    right: Math.min(p.right, w * 0.08),
-  };
+  const sx = Math.min(1, (w * 0.7) / Math.max(1, p.left + p.right));
+  const sy = Math.min(1, (h * 0.6) / Math.max(1, p.top + p.bottom));
+  return { top: p.top * sy, bottom: p.bottom * sy, left: p.left * sx, right: p.right * sx };
 }
 
 function addLayers(map: MLMap, net: RoadNetwork) {
@@ -98,6 +131,8 @@ function addLayers(map: MLMap, net: RoadNetwork) {
   });
   const w = (base: number, top: number) =>
     ['interpolate', ['linear'], ['zoom'], 11, ['*', ['coalesce', ['feature-state', 'w'], 1], base], 16, ['*', ['coalesce', ['feature-state', 'w'], 1], top]] as unknown as number;
+  // road and route lines sit under the basemap's names, the way a traffic map keeps street names readable
+  const under = map.getLayer(FIRST_LABEL) ? FIRST_LABEL : undefined;
 
   map.addLayer({
     id: 'seg-halo',
@@ -105,41 +140,42 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     source: 'segments',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#e8edf3',
+      'line-color': '#eeeff1',
       'line-width': w(7, 16),
       'line-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.32, ['boolean', ['feature-state', 'hover'], false], 0.18, 0],
     },
-  });
+  }, under);
   map.addLayer({
     id: 'seg-casing',
     type: 'line',
     source: 'segments',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#06080c', 'line-width': w(4.2, 10), 'line-opacity': 0.9 },
-  });
+    paint: { 'line-color': '#0b0b0b', 'line-width': w(4.2, 10), 'line-opacity': 0.9 },
+  }, under);
   map.addLayer({
     id: 'seg-line',
     type: 'line',
     source: 'segments',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': ['coalesce', ['feature-state', 'color'], '#4a5566'],
+      'line-color': ['coalesce', ['feature-state', 'color'], '#545454'],
       'line-width': w(2.4, 6.5),
       'line-opacity': ['coalesce', ['feature-state', 'opacity'], 0.8],
     },
-  });
+  }, under);
   map.addLayer({
     id: 'seg-worse',
     type: 'line',
     source: 'segments',
     layout: { 'line-cap': 'butt', 'line-join': 'round' },
     paint: {
-      'line-color': '#06080c',
+      'line-color': '#0b0b0b',
       'line-width': w(1.2, 2.4),
       'line-dasharray': [1.5, 2],
-      'line-opacity': ['case', ['boolean', ['feature-state', 'worse'], false], 0.85, 0],
+      // 'wo' eases 0..1 with the colour, so the dashes fade in rather than appear
+      'line-opacity': ['*', 0.85, ['coalesce', ['feature-state', 'wo'], 0]],
     },
-  });
+  }, under);
 
   map.addSource('route-b', { type: 'geojson', data: emptyFC });
   map.addSource('route-a', { type: 'geojson', data: emptyFC });
@@ -148,22 +184,52 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     type: 'line',
     source: 'route-b',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#c3cbd6', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2, 16, 4], 'line-dasharray': [1.2, 1.6], 'line-opacity': 0.75 },
-  });
+    paint: { 'line-color': '#bfbfbf', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2, 16, 4], 'line-dasharray': [1.2, 1.6], 'line-opacity': 0.75 },
+  }, under);
   map.addLayer({
     id: 'route-a-casing',
     type: 'line',
     source: 'route-a',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#06080c', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 7, 16, 14] },
-  });
+    paint: { 'line-color': '#0b0b0b', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 7, 16, 14] },
+  }, under);
   map.addLayer({
     id: 'route-a-line',
     type: 'line',
     source: 'route-a',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#3fd4e4', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 16, 8] },
-  });
+    paint: { 'line-color': '#f2f2f3', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 16, 8] },
+  }, under);
+
+  // the route race: a light and a short streak for each route, dark ringed in white on the off-white
+  // recommended line, light on the usual one, so the moving trip reads against the line it runs on
+  map.addSource('race', { type: 'geojson', data: emptyFC });
+  map.addLayer({
+    id: 'race-trail',
+    type: 'line',
+    source: 'race',
+    filter: ['==', ['geometry-type'], 'LineString'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['match', ['get', 'who'], 'a', '#0a0a0b', '#dcdcdc'],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 11, 4, 16, 8],
+      'line-opacity': ['*', ['get', 'fade'], 0.7],
+    },
+  }, under);
+  map.addLayer({
+    id: 'race-dot',
+    type: 'circle',
+    source: 'race',
+    filter: ['==', ['geometry-type'], 'Point'],
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 5.5, 16, 9],
+      'circle-color': ['match', ['get', 'who'], 'a', '#0a0a0b', '#e7e7e7'],
+      'circle-stroke-color': ['match', ['get', 'who'], 'a', '#ffffff', '#0b0b0b'],
+      'circle-stroke-width': 3,
+      'circle-opacity': ['get', 'fade'],
+      'circle-stroke-opacity': ['get', 'fade'],
+    },
+  }, under);
 
   map.addSource('vehicles', { type: 'geojson', data: emptyFC });
   map.addLayer({
@@ -172,9 +238,11 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     source: 'vehicles',
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 1.5, 14, 2.6, 17, 4.5],
-      'circle-color': '#d9e7f7',
-      'circle-opacity': 0.92,
-      'circle-stroke-color': '#06080c',
+      'circle-color': '#e5e5e5',
+      // 'o' fades new vehicles in and departed ones out
+      'circle-opacity': ['*', 0.92, ['coalesce', ['get', 'o'], 1]],
+      'circle-stroke-opacity': ['coalesce', ['get', 'o'], 1],
+      'circle-stroke-color': '#0b0b0b',
       'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 0.4, 16, 1.2],
     },
   });
@@ -194,8 +262,8 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     layout: { visibility: 'none' },
     paint: {
       'circle-radius': ['case', ['any', ['boolean', ['feature-state', 'origin'], false], ['boolean', ['feature-state', 'destination'], false]], 8, ['boolean', ['feature-state', 'hover'], false], 7, 5],
-      'circle-color': ['case', ['boolean', ['feature-state', 'origin'], false], '#3fd4e4', ['boolean', ['feature-state', 'destination'], false], '#e8edf3', '#121821'],
-      'circle-stroke-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#e8edf3', '#a3afbf'],
+      'circle-color': ['case', ['boolean', ['feature-state', 'origin'], false], '#f2f2f3', ['boolean', ['feature-state', 'destination'], false], '#eeeff1', '#181818'],
+      'circle-stroke-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#eeeff1', '#adadad'],
       'circle-stroke-width': 2,
     },
   });
@@ -212,6 +280,7 @@ export function TrafficMap({
   mode = 'now',
   horizon = 10,
   selectedSegment = null,
+  hoverSegment = null,
   onSelectSegment,
   showVehicles = true,
   incidents = [],
@@ -269,6 +338,8 @@ export function TrafficMap({
           new maplibregl.AttributionControl({ compact: true, customAttribution: ok ? undefined : 'Road shapes © OpenStreetMap contributors' }),
           'bottom-right',
         );
+        // Start the credit folded to its (i) button, so it never sits under the legend; it opens on click.
+        map.once('load', () => container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'));
         const m = map;
         // Draw our layers as soon as the style is parsed, not after every basemap tile has arrived.
         let setUp = false;
@@ -353,19 +424,21 @@ export function TrafficMap({
     return out;
   }, [network, states, predictions, mode, horizon]);
 
-  const current = useRef(new Map<string, { rgb: [number, number, number]; w: number }>());
+  /** What each segment looks like right now, so a new target eases from the colour on screen. */
+  const current = useRef(new Map<string, Look>());
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const anims: { id: string; from: { rgb: [number, number, number]; w: number }; to: { rgb: [number, number, number]; w: number } }[] = [];
+    const anims: { id: string; from: Look; to: Look }[] = [];
+    const paint = (id: string, l: Look) =>
+      map.setFeatureState({ source: 'segments', id }, { color: `rgb(${l.rgb.join(',')})`, w: l.w, opacity: l.op, wo: l.wo });
     for (const [id, t] of targets) {
-      const to = { rgb: LEVEL_RGB[t.level], w: LEVEL_WIDTH[t.level] };
+      const to: Look = { rgb: LEVEL_RGB[t.level], w: LEVEL_WIDTH[t.level], op: LEVEL_OPACITY[t.level], wo: t.worse ? 1 : 0 };
       const from = current.current.get(id);
-      map.setFeatureState({ source: 'segments', id }, { opacity: LEVEL_OPACITY[t.level], worse: t.worse });
       if (!from || reduce) {
         current.current.set(id, to);
-        map.setFeatureState({ source: 'segments', id }, { color: `rgb(${to.rgb.join(',')})`, w: to.w });
-      } else if (from.rgb.join() !== to.rgb.join() || from.w !== to.w) {
+        paint(id, to);
+      } else if (from.rgb.join() !== to.rgb.join() || from.w !== to.w || from.op !== to.op || from.wo !== to.wo) {
         anims.push({ id, from, to });
       }
     }
@@ -375,10 +448,14 @@ export function TrafficMap({
     const tick = (now: number) => {
       const k = easeInOut(Math.min(1, (now - start) / COLOR_MS));
       for (const a of anims) {
-        const rgb = a.from.rgb.map((c, i) => Math.round(c + (a.to.rgb[i] - c) * k)) as [number, number, number];
-        const w = a.from.w + (a.to.w - a.from.w) * k;
-        current.current.set(a.id, { rgb, w });
-        map.setFeatureState({ source: 'segments', id: a.id }, { color: `rgb(${rgb.join(',')})`, w });
+        const l: Look = {
+          rgb: a.from.rgb.map((c, i) => Math.round(c + (a.to.rgb[i] - c) * k)) as [number, number, number],
+          w: a.from.w + (a.to.w - a.from.w) * k,
+          op: a.from.op + (a.to.op - a.from.op) * k,
+          wo: a.from.wo + (a.to.wo - a.from.wo) * k,
+        };
+        current.current.set(a.id, l);
+        paint(a.id, l);
       }
       if (k < 1) raf = requestAnimationFrame(tick);
     };
@@ -396,7 +473,17 @@ export function TrafficMap({
     selectedRef.current = selectedSegment;
   }, [selectedSegment, ready]);
 
-  // ---- vehicles: interpolate between 1 s frames so movement is continuous ----
+  // ---- a segment hovered outside the map ----
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !hoverSegment) return;
+    map.setFeatureState({ source: 'segments', id: hoverSegment }, { hover: true });
+    return () => {
+      if (mapRef.current) map.setFeatureState({ source: 'segments', id: hoverSegment }, { hover: false });
+    };
+  }, [hoverSegment, ready]);
+
+  // ---- vehicles: slide between 1 s frames; new ones fade in, departed ones fade out where they were ----
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
@@ -406,28 +493,49 @@ export function TrafficMap({
       src.setData(emptyFC);
       return;
     }
-    const pos = new Map<string, { fx: number; fy: number; tx: number; ty: number }>();
+    const FADE_IN = 360;
+    const FADE_OUT = 260;
+    const pos = new Map<string, { fx: number; fy: number; tx: number; ty: number; born: number }>();
+    const gone = new Map<string, { x: number; y: number; died: number }>();
     let t0 = performance.now();
     let dur = 1000;
     let lastFrame = 0;
+    let lastBorn = -Infinity;
     let raf = 0;
     let lastPush = 0;
 
     const progress = (now: number) => (reduce ? 1 : Math.min(1, (now - t0) / dur));
-    const push = (k: number) => {
+    const opacityIn = (now: number, born: number) => (reduce ? 1 : easeOut(Math.min(1, (now - born) / FADE_IN)));
+    const busy = (now: number) => progress(now) < 1 || gone.size > 0 || (!reduce && now - lastBorn < FADE_IN);
+    const push = (now: number) => {
+      const k = progress(now);
       const features: GeoJSON.Feature[] = [];
       for (const [id, p] of pos) {
-        features.push({ type: 'Feature', id, properties: {}, geometry: { type: 'Point', coordinates: [p.fx + (p.tx - p.fx) * k, p.fy + (p.ty - p.fy) * k] } });
+        features.push({
+          type: 'Feature',
+          id,
+          properties: { o: opacityIn(now, p.born) },
+          geometry: { type: 'Point', coordinates: [p.fx + (p.tx - p.fx) * k, p.fy + (p.ty - p.fy) * k] },
+        });
+      }
+      for (const [id, g] of gone) {
+        const o = reduce ? 0 : 1 - Math.min(1, (now - g.died) / FADE_OUT);
+        if (o <= 0) {
+          gone.delete(id);
+          continue;
+        }
+        features.push({ type: 'Feature', id: `${id}~`, properties: { o }, geometry: { type: 'Point', coordinates: [g.x, g.y] } });
       }
       src.setData({ type: 'FeatureCollection', features });
     };
     const frame = (now: number) => {
-      const k = progress(now);
-      if (now - lastPush >= 33 || k >= 1) {
-        push(k);
+      const done = !busy(now);
+      // about 30 updates a second is smooth for points this small, and halves the GeoJSON work
+      if (done || now - lastPush >= 33) {
+        push(now);
         lastPush = now;
       }
-      raf = k < 1 ? requestAnimationFrame(frame) : 0;
+      raf = done && !busy(now) ? 0 : requestAnimationFrame(frame);
     };
     const onVehicles = (list: { vehicle_id: string; lng: number; lat: number }[]) => {
       const now = performance.now();
@@ -436,13 +544,27 @@ export function TrafficMap({
       for (const v of list) {
         seen.add(v.vehicle_id);
         const prev = pos.get(v.vehicle_id);
-        const fx = prev ? prev.fx + (prev.tx - prev.fx) * k : v.lng;
-        const fy = prev ? prev.fy + (prev.ty - prev.fy) * k : v.lat;
-        // a jump of over ~300 m is a wrap or a reroute: place it, do not slide it
-        const far = prev && Math.hypot(v.lng - fx, v.lat - fy) > 0.003;
-        pos.set(v.vehicle_id, far ? { fx: v.lng, fy: v.lat, tx: v.lng, ty: v.lat } : { fx, fy, tx: v.lng, ty: v.lat });
+        if (!prev) {
+          pos.set(v.vehicle_id, { fx: v.lng, fy: v.lat, tx: v.lng, ty: v.lat, born: now });
+          lastBorn = now;
+          continue;
+        }
+        const fx = prev.fx + (prev.tx - prev.fx) * k;
+        const fy = prev.fy + (prev.ty - prev.fy) * k;
+        // a jump of over ~300 m is a wrap or a reroute: fade out where it was and in where it is, never slide across the map
+        if (Math.hypot(v.lng - fx, v.lat - fy) > 0.003) {
+          gone.set(v.vehicle_id, { x: fx, y: fy, died: now });
+          pos.set(v.vehicle_id, { fx: v.lng, fy: v.lat, tx: v.lng, ty: v.lat, born: now });
+          lastBorn = now;
+        } else {
+          pos.set(v.vehicle_id, { fx, fy, tx: v.lng, ty: v.lat, born: prev.born });
+        }
       }
-      for (const id of [...pos.keys()]) if (!seen.has(id)) pos.delete(id);
+      for (const [id, p] of pos) {
+        if (seen.has(id)) continue;
+        gone.set(id, { x: p.fx + (p.tx - p.fx) * k, y: p.fy + (p.ty - p.fy) * k, died: now });
+        pos.delete(id);
+      }
       dur = lastFrame ? Math.min(2500, Math.max(400, now - lastFrame)) : 1000;
       lastFrame = now;
       t0 = now;
@@ -458,24 +580,45 @@ export function TrafficMap({
     };
   }, [ready, showVehicles, reduce]);
 
-  // ---- incidents: pulsing markers at the segment's midpoint ----
+  // ---- incidents: pulsing markers at the segment's midpoint; only new ones enter, gone ones fade out ----
+  const markersRef = useRef(new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement }>());
   const incidentKey = incidents.map((i) => `${i.incident_id}:${i.severity}`).join('|');
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const markers = incidents
-      .filter((i) => segIndex[i.segment_id])
-      .map((i) => {
-        const el = document.createElement('div');
-        el.className = `incident-marker incident-marker--${i.severity}`;
-        el.setAttribute('role', 'img');
-        el.setAttribute('aria-label', `Active incident on ${segIndex[i.segment_id].name}`);
-        el.innerHTML = '<span class="incident-marker__ring"></span><span class="incident-marker__core"></span>';
-        return new maplibregl.Marker({ element: el }).setLngLat(midpoint(segIndex[i.segment_id].geometry)).addTo(map);
-      });
-    return () => markers.forEach((m) => m.remove());
+    const live = markersRef.current;
+    const wanted = new Set<string>();
+    for (const i of incidents) {
+      const seg = segIndex[i.segment_id];
+      if (!seg) continue;
+      wanted.add(i.incident_id);
+      const have = live.get(i.incident_id);
+      if (have) {
+        have.el.className = `incident-marker incident-marker--${i.severity}`;
+        continue;
+      }
+      const el = document.createElement('div');
+      el.className = `incident-marker incident-marker--${i.severity}`;
+      el.setAttribute('role', 'img');
+      el.setAttribute('aria-label', `Active incident on ${seg.name}`);
+      el.innerHTML = '<span class="incident-marker__ring"></span><span class="incident-marker__core"></span>';
+      live.set(i.incident_id, { el, marker: new maplibregl.Marker({ element: el }).setLngLat(midpoint(seg.geometry)).addTo(map) });
+    }
+    for (const [id, m] of live) {
+      if (wanted.has(id)) continue;
+      live.delete(id);
+      m.el.classList.add('is-leaving');
+      setTimeout(() => m.marker.remove(), reduce ? 0 : 200);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incidentKey, ready, segIndex]);
+  useEffect(() => {
+    const live = markersRef.current;
+    return () => {
+      for (const m of live.values()) m.marker.remove();
+      live.clear();
+    };
+  }, [network]);
 
   // ---- routes: drawn in once, from origin to destination ----
   useEffect(() => {
@@ -493,19 +636,52 @@ export function TrafficMap({
       return;
     }
     const coords = route.primary;
+    const raceSrc = map.getSource('race') as GeoJSONSource;
+    raceSrc.setData(emptyFC);
     if (reduce || coords.length < 3) {
       a.setData(line(coords));
       return;
     }
-    const start = performance.now();
     let raf = 0;
+
+    // the race: both trips leave together; the slower one takes RACE_MS on screen, the faster one its share
+    // of that, so the gap at the finish is the time saved. A short hold at the finish, then both fade.
+    const RACE_MS = 3600;
+    const race = () => {
+      const r = route.race;
+      if (!r || !r.primaryEtaS) return;
+      const trips = [{ who: 'a', m: measure(coords), eta: r.primaryEtaS }];
+      if (route.compare && route.compare.length > 2 && r.compareEtaS) trips.push({ who: 'b', m: measure(route.compare), eta: r.compareEtaS });
+      const slowest = Math.max(...trips.map((t) => t.eta));
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const el = now - t0;
+        const fade = Math.min(1, el / 200) * (1 - Math.min(1, Math.max(0, el - RACE_MS - 1200) / 400));
+        const features: GeoJSON.Feature[] = [];
+        for (const t of trips) {
+          const f = easeInOut(Math.min(1, el / ((RACE_MS * t.eta) / slowest)));
+          features.push({ type: 'Feature', properties: { who: t.who, fade }, geometry: { type: 'LineString', coordinates: t.m.stretch(Math.max(0, f - 0.12), f) } });
+          features.push({ type: 'Feature', properties: { who: t.who, fade }, geometry: { type: 'Point', coordinates: t.m.at(f) } });
+        }
+        raceSrc.setData({ type: 'FeatureCollection', features });
+        if (el < RACE_MS + 1600) raf = requestAnimationFrame(step);
+        else raceSrc.setData(emptyFC);
+      };
+      raf = requestAnimationFrame(step);
+    };
+
+    const start = performance.now();
     const tick = (now: number) => {
       const k = easeOut(Math.min(1, (now - start) / 700));
       a.setData(line(coords.slice(0, Math.max(2, Math.ceil(coords.length * k)))));
       if (k < 1) raf = requestAnimationFrame(tick);
+      else race();
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      raceSrc.setData(emptyFC);
+    };
   }, [route, ready, reduce]);
 
   // ---- junction picking (routes page) ----
@@ -530,6 +706,13 @@ export function TrafficMap({
   const resetView = () => {
     const map = mapRef.current;
     if (map && network) map.fitBounds(bounds(network), { padding: fitPadding(map.getContainer(), paddingRef.current), duration: reduce ? 0 : 500 });
+  };
+
+  /** Flip the tooltip to the pointer's other side when it would run off the map. */
+  const tipSide = (p: { x: number; y: number }) => {
+    const el = containerRef.current;
+    if (!el) return '';
+    return `${p.x > el.clientWidth - 240 ? 'map__tip--left' : ''} ${p.y > el.clientHeight - 110 ? 'map__tip--up' : ''}`;
   };
 
   const hoverSeg = hover ? segIndex[hover.id] : null;
@@ -577,7 +760,7 @@ export function TrafficMap({
         </div>
       )}
       {hover && hoverSeg && (
-        <div className="map__tip" style={{ left: hover.x, top: hover.y }}>
+        <div className={`map__tip ${tipSide(hover)}`} style={{ left: hover.x, top: hover.y }}>
           <p className="map__tip-title">{hoverSeg.name}</p>
           <p className="map__tip-id mono">{hoverSeg.id}</p>
           {mode === 'forecast' && hoverPred ? (
@@ -600,7 +783,7 @@ export function TrafficMap({
         </div>
       )}
       {nodeHover && hoverNode && (
-        <div className="map__tip" style={{ left: nodeHover.x, top: nodeHover.y }}>
+        <div className={`map__tip ${tipSide(nodeHover)}`} style={{ left: nodeHover.x, top: nodeHover.y }}>
           <p className="map__tip-title">{hoverNode.name}</p>
           <p className="map__tip-id mono">{hoverNode.id}</p>
         </div>

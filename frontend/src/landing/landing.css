@@ -1,0 +1,1693 @@
+/*
+ * The landing: Arterial's front door, inside the app. One dark ground, the network as the picture,
+ * and motion where it explains something: the network drawing itself from its centre, traffic as
+ * light, the forecast played by the scroll, light travelling the pipeline, and the network carried
+ * into the console. Reduced motion keeps every picture and drops every movement.
+ */
+
+.lp {
+  --lp-bg: #0a0a0b;
+  --lp-gut: 32px;
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  background: var(--lp-bg);
+  color: var(--ink-1);
+  overflow-x: clip;
+}
+
+.lp-wrap {
+  width: min(100% - 2 * var(--lp-gut), 1200px);
+  margin-inline: auto;
+}
+
+.lp .num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- nav ---------- */
+
+.lp-nav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 30;
+  height: 64px;
+  background: rgb(10 10 11 / 0.62);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.06);
+}
+
+.lp-nav__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  height: 100%;
+}
+
+.lp-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-1);
+  font-size: var(--t-15);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  border-radius: var(--r-sm);
+}
+
+.lp-brand__mark {
+  border-radius: 7px;
+}
+
+.lp-nav__links {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* the stream's state, as a system readout: mono, with a dot that turns on when there is something to show */
+.lp-readout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / 0.03);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.lp-readout__dot {
+  width: 6px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-4);
+}
+
+.lp-readout.is-on .lp-readout__dot {
+  background: var(--accent);
+}
+
+.lp-nav__links a {
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  font-size: var(--t-13);
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-nav__links a:hover {
+    background: rgb(255 255 255 / 0.06);
+    color: var(--ink-1);
+  }
+}
+
+/* ---------- buttons ---------- */
+
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--r-pill);
+  font-size: var(--t-14);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  transition:
+    background-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.lp-btn:active {
+  transform: scale(0.97);
+}
+
+.lp-btn svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.lp-btn--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  /* depth from a soft top highlight, not a glow */
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4);
+}
+
+.lp-btn--ghost {
+  color: var(--ink-1);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+}
+
+.lp-btn--sm {
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: var(--t-13);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-btn--primary:hover {
+    background: var(--accent-strong);
+  }
+  .lp-btn--primary:hover svg {
+    transform: translateX(3px);
+  }
+  .lp-btn--ghost:hover {
+    background: rgb(255 255 255 / 0.06);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.26);
+  }
+}
+
+/* ---------- hero ---------- */
+
+.lp-hero {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--lp-bg);
+}
+
+.lp-viz {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  perspective: 1500px;
+  perspective-origin: 62% 40%;
+}
+
+.lp-hero .lp-city {
+  view-transition-name: network;
+}
+
+.lp-pause {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
+  color: var(--ink-2);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition:
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.lp-pause:active {
+  transform: scale(0.94);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-pause:hover {
+    background: rgb(255 255 255 / 0.12);
+    color: var(--ink-1);
+  }
+}
+
+/* the words stand on a calm, dark left side */
+.lp-hero__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgb(10 10 11 / 0.92) 0%, rgb(10 10 11 / 0.75) 32%, rgb(10 10 11 / 0) 62%);
+}
+
+.lp-hero__content {
+  position: relative;
+  z-index: 2;
+  padding: 120px 0 72px;
+}
+
+/* where the picture's data comes from: a quiet line of mono, not a badge */
+.lp-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+}
+
+.lp-status__dot {
+  position: relative;
+  width: 7px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.lp-status.is-live .lp-status__dot {
+  background: var(--accent);
+}
+
+.lp-h1 {
+  /* two even lines on a wide screen; the browser balances the break wherever the width is */
+  max-width: 11em;
+  text-wrap: balance;
+  margin-top: var(--s-6);
+  font-size: clamp(38px, 4.6vw, 68px);
+  font-weight: 400;
+  letter-spacing: -0.042em;
+  line-height: 1.02;
+  color: var(--ink-1);
+}
+
+.lp-h1 .lp-rise {
+  display: inline-block;
+}
+
+.lp-lead {
+  max-width: 46ch;
+  margin-top: var(--s-6);
+  color: var(--ink-2);
+  font-size: var(--t-18);
+  line-height: 1.55;
+}
+
+.lp-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-8);
+}
+
+.lp-fine {
+  margin-top: var(--s-6);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+
+/* ---------- the hero's product panel: the console's own list, live, over the network ---------- */
+
+.lp-hero__panel {
+  position: absolute;
+  inset: auto 0 64px 0;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.lp-panel {
+  width: min(400px, 34vw);
+  padding: 16px 16px 12px;
+  border-radius: var(--r-xl);
+  background: var(--glass-sheen), rgb(18 18 20 / 0.9);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    0 0 0 1px rgb(255 255 255 / 0.09),
+    0 30px 80px -30px rgb(0 0 0 / 0.95);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  pointer-events: auto;
+}
+
+.lp-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 2px 8px 12px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.lp-panel__title {
+  font-size: var(--t-13);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+.lp-panel__when {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.lp-panel__count {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.lp-panel__rows {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.lp-panel__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 8px;
+  border-radius: 10px;
+  animation: lp-row-in 520ms var(--ease-out) both;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.lp-panel__row:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.lp-panel__row:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+@keyframes lp-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-panel__row:hover {
+    background: rgb(255 255 255 / 0.035);
+  }
+}
+
+.lp-panel__road {
+  overflow: hidden;
+  font-size: var(--t-13);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-panel__id {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.lp-panel__delta {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lp-panel__levels {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: var(--t-12);
+}
+
+.lp-panel__from {
+  color: var(--ink-3);
+}
+
+.lp-panel__meter {
+  width: 64px;
+}
+
+.lp-panel__empty {
+  padding: 20px 8px 16px;
+  color: var(--ink-3);
+  font-size: var(--t-13);
+}
+
+.lp-panel__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: 4px;
+  padding: 12px 8px 2px;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* the forecast's provenance stays on one line */
+.lp-panel__foot > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-panel__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: var(--t-12);
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: var(--r-xs);
+}
+
+.lp-panel__link svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-panel__link:hover svg {
+    transform: translateX(2px);
+  }
+}
+
+/* once, on load: the words rise out of a short blur, one after another */
+.lp-rise {
+  animation: lp-rise 900ms var(--ease-out) both;
+  animation-delay: calc(220ms + var(--i, 0) * 90ms);
+}
+
+@keyframes lp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(8px);
+  }
+}
+
+/* ---------- sections ---------- */
+
+.lp-section {
+  padding: 140px 0;
+  border-top: 1px solid rgb(255 255 255 / 0.05);
+}
+
+.lp-head {
+  max-width: 680px;
+  margin-bottom: var(--s-12);
+}
+
+.lp-eyebrow {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+}
+
+.lp-head--split {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  align-items: start;
+  gap: var(--s-12);
+  max-width: none;
+}
+
+.lp-head--split .lp-lede {
+  margin-top: 0;
+  font-size: var(--t-16);
+}
+
+.lp-h2 {
+  margin-top: var(--s-3);
+  font-size: clamp(32px, 4vw, 52px);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+}
+
+.lp-lede {
+  margin-top: var(--s-5);
+  color: var(--ink-2);
+  font-size: var(--t-18);
+  line-height: 1.55;
+}
+
+/* ---------- forecast, played by the scroll ---------- */
+
+.lp-scrub {
+  position: relative;
+  height: 320vh;
+  border-top: 1px solid rgb(255 255 255 / 0.05);
+}
+
+.lp-scrub__stick {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  height: 100svh;
+  padding-top: 64px;
+}
+
+.lp-scrub__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: var(--s-12);
+}
+
+.lp-steps {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--s-8);
+}
+
+.lp-steps li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--s-3);
+  padding: 12px 16px;
+  border-radius: var(--r-md);
+  color: var(--ink-3);
+  font-size: var(--t-14);
+  transition:
+    background-color 300ms var(--ease-out),
+    color 300ms var(--ease-out),
+    box-shadow 300ms var(--ease-out);
+}
+
+.lp-steps li.is-past {
+  color: var(--ink-2);
+}
+
+.lp-steps li.is-on {
+  background: rgb(255 255 255 / 0.04);
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--ink-1);
+}
+
+.lp-steps__t {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.lp-scrub__map {
+  position: relative;
+}
+
+.lp-pause--map {
+  right: 10px;
+  bottom: 10px;
+}
+
+.lp-clock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(32px, 4.6vw, 64px);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  color: var(--ink-1);
+}
+
+.lp-rail {
+  position: relative;
+  margin-top: var(--s-6);
+}
+
+.lp-rail__track {
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.lp-rail__fill {
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+}
+
+.lp-rail__ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  color: var(--ink-3);
+  font-size: var(--t-12);
+}
+
+/* ---------- pipeline ---------- */
+
+.lp-flow__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.lp-flow__region {
+  fill: rgb(242 242 243 / 0.03);
+  stroke: rgb(242 242 243 / 0.25);
+  stroke-width: 1.2;
+}
+
+.lp-flow__region-label {
+  fill: var(--ink-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lp-flow__edge {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.16);
+  stroke-width: 1.4;
+}
+
+.lp-comet {
+  fill: var(--accent);
+}
+
+.lp-flow__node rect {
+  fill: #121214;
+  stroke: rgb(255 255 255 / 0.12);
+  stroke-width: 1;
+}
+
+.lp-flow__node.is-condense rect {
+  fill: #17171a;
+  stroke: rgb(242 242 243 / 0.38);
+}
+
+.lp-flow__node.is-topic rect {
+  fill: transparent;
+  stroke-dasharray: 4 4;
+  stroke: rgb(255 255 255 / 0.28);
+}
+
+.lp-flow__kind {
+  fill: var(--ink-3);
+  font-size: 11px;
+}
+
+.lp-flow__name {
+  fill: var(--ink-1);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.lp-flow__rate {
+  fill: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.lp-flow__list {
+  display: none;
+}
+
+.lp-points {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+  margin-top: var(--s-12);
+  color: var(--ink-2);
+  font-size: var(--t-15);
+}
+
+.lp-points strong {
+  color: var(--ink-1);
+  font-weight: 500;
+}
+
+/* ---------- analytics: the week as a landscape, turned by the scroll ---------- */
+
+.lp-peaks__stage {
+  position: relative;
+  min-height: 160px;
+}
+
+/* the 3D view needs a fixed stage; the flat grid sets its own height */
+.lp-peaks__stage.is-3d {
+  height: clamp(420px, 46vw, 600px);
+  /* as the camera swings, the floor's near corner reaches the canvas edge: let it fade out, not cut off */
+  mask-image: linear-gradient(180deg, transparent 0, #000 6%, #000 84%, transparent 100%);
+}
+
+/* no drag here: the page's scroll turns it, and the pointer only names a bar */
+.lp-peaks .hl--scroll,
+.lp-peaks .hl--scroll:active,
+.lp-peaks .hl--scroll.is-pointing {
+  cursor: default;
+}
+
+.lp-peaks__empty {
+  display: grid;
+  place-content: center;
+  min-height: 160px;
+  color: var(--ink-3);
+  font-size: var(--t-14);
+}
+
+.lp-peaks__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+  margin-top: var(--s-8);
+  padding-top: var(--s-6);
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.lp-peaks__facts dt {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+}
+
+.lp-peaks__facts dd {
+  margin-top: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-15);
+}
+
+.lp-peaks__facts strong {
+  color: var(--ink-1);
+  font-weight: 500;
+}
+
+/* ---------- the console ---------- */
+
+.lp-shots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-6);
+}
+
+.lp-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 30px 60px -30px rgb(0 0 0 / 0.9);
+}
+
+.lp-shot figcaption {
+  margin-top: var(--s-4);
+  color: var(--ink-2);
+  font-size: var(--t-14);
+}
+
+.lp-shot figcaption strong {
+  color: var(--ink-1);
+  font-weight: 500;
+}
+
+/*
+ * The two console views stand up as they scroll in: each starts leaning back from its bottom edge, like a
+ * screen being opened, and reaches upright by the time it is well in view. Driven by the scroll itself
+ * (a view timeline), so it runs off the main thread and tracks the page exactly; where browsers lack view
+ * timelines, or motion is reduced, the views simply sit upright.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .lp-shots {
+      perspective: 1400px;
+      perspective-origin: 50% 0%;
+    }
+    .lp-shot {
+      transform-origin: 50% 100%;
+      animation: lp-stand both;
+      /* a gentle ease-out: the scroll is already the motion, a strong curve would snap it upright on entry */
+      animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      animation-timeline: view();
+      animation-range: entry 0% cover 48%;
+    }
+    /* the second lands a beat later, so the pair reads as two screens, not one slab */
+    .lp-shot + .lp-shot {
+      animation-range: entry 12% cover 56%;
+    }
+  }
+}
+
+@keyframes lp-stand {
+  from {
+    opacity: 0.25;
+    transform: rotateX(34deg) translateY(72px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.lp-views {
+  display: grid;
+  margin-top: var(--s-12);
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.lp-views > li {
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+/* an index of the console: one row per view, its one question beside its name */
+.lp-view {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 14rem) minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 16px;
+  min-height: 64px;
+  padding: 0 8px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.lp-view__icon {
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+
+.lp-view__label {
+  font-size: var(--t-15);
+  font-weight: 500;
+}
+
+.lp-view__line {
+  color: var(--ink-3);
+  font-size: var(--t-14);
+}
+
+.lp-view__go {
+  color: var(--ink-4);
+  transition:
+    color var(--dur-fast) ease,
+    transform var(--dur-base) var(--ease-out);
+}
+
+.lp-view:focus-visible .lp-view__go {
+  color: var(--ink-1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-view:hover {
+    background: rgb(255 255 255 / 0.03);
+  }
+  .lp-view:hover .lp-view__go {
+    color: var(--ink-1);
+    transform: translateX(2px);
+  }
+}
+
+@media (max-width: 760px) {
+  .lp-view {
+    grid-template-columns: 20px minmax(0, 1fr) 16px;
+    row-gap: 4px;
+    padding: 16px 4px;
+  }
+  .lp-view__icon {
+    grid-row: span 2;
+  }
+  .lp-view__line {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .lp-view__go {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* ---------- questions ---------- */
+
+.lp-faq {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--s-12);
+}
+
+.lp-qa div {
+  padding: 20px 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.lp-qa div:first-child {
+  padding-top: 0;
+}
+
+.lp-qa dt {
+  font-size: var(--t-16);
+  font-weight: 500;
+}
+
+.lp-qa dd {
+  margin-top: 8px;
+  color: var(--ink-2);
+  font-size: var(--t-15);
+  line-height: 1.6;
+}
+
+.lp-qa a {
+  color: var(--accent);
+}
+
+/* ---------- close ---------- */
+
+.lp-cta {
+  padding: 40px 0 88px;
+}
+
+.lp-cta__card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--s-6);
+  min-height: clamp(520px, 64vh, 680px);
+  padding: clamp(64px, 8vw, 112px) clamp(24px, 6vw, 96px);
+  border-radius: 20px;
+  background: #121214;
+  color: var(--ink-1);
+  text-align: center;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* the night highway under the close, and a veil over its far end so the words stand on calm ground */
+.lp-close__road {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.lp-cta__card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, #121214 0%, rgb(18 18 20 / 0.88) 34%, rgb(18 18 20 / 0) 66%);
+}
+
+.lp-cta__card > :not(.lp-close__road) {
+  position: relative;
+  z-index: 2;
+}
+
+.lp-cta__card > .lp-close__pause {
+  position: absolute;
+  z-index: 3;
+}
+
+.lp-cta__kicker {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
+}
+
+.lp-cta__title {
+  max-width: 18ch;
+  font-size: clamp(36px, 5vw, 64px);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+}
+
+/* ---------- footer: the mark, and the links people look for at the end ---------- */
+
+.lp-foot {
+  padding: 72px 0 32px;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent 40%);
+}
+
+.lp-foot__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--s-12);
+  align-items: start;
+}
+
+.lp-foot__brand {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-3);
+}
+
+/* the mark, flat, as it is everywhere else */
+.lp-foot__mark {
+  display: block;
+  margin-bottom: var(--s-4);
+  border-radius: 10px;
+}
+
+.lp-foot__name {
+  margin-top: var(--s-2);
+  font-size: var(--t-28);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.lp-foot__line {
+  max-width: 34ch;
+  margin-bottom: var(--s-2);
+  color: var(--ink-2);
+  font-size: var(--t-14);
+  line-height: 1.55;
+}
+
+.lp-foot__cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+}
+
+.lp-foot__h {
+  margin-bottom: var(--s-4);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+
+.lp-foot__cols ul {
+  display: grid;
+  gap: 12px;
+}
+
+.lp-foot__link {
+  position: relative;
+  color: var(--ink-2);
+  font-size: var(--t-14);
+  text-decoration: none;
+  transition: color var(--dur-fast) ease;
+}
+
+/* the underline draws in from the left on hover */
+.lp-foot__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-foot__link:hover {
+    color: var(--ink-1);
+  }
+  .lp-foot__link:hover::after {
+    transform: scaleX(1);
+  }
+}
+
+.lp-foot__link:focus-visible {
+  color: var(--ink-1);
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.lp-foot__facts li {
+  color: var(--ink-3);
+  font-size: var(--t-13);
+  line-height: 1.45;
+}
+
+.lp-foot__bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: 64px;
+  padding-top: 20px;
+  border-top: 1px solid rgb(255 255 255 / 0.05);
+  color: var(--ink-3);
+  font-size: var(--t-12);
+}
+
+.lp-foot__credit {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: rgb(255 255 255 / 0.25);
+  text-underline-offset: 2px;
+  transition: color var(--dur-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lp-foot__credit:hover {
+    color: var(--ink-1);
+  }
+}
+
+@media (max-width: 1023px) {
+  /* on a stacked hero the forecast panel would sit on the corridors under the words */
+  .lp-hero__panel {
+    display: none;
+  }
+  /* the words at the top, the city's corridors in the space kept under them */
+  .lp-hero {
+    align-items: flex-start;
+  }
+  /* the words and the space kept for the city under them fit one screen, so the hero ends on it */
+  .lp-hero__content {
+    padding-top: 104px;
+    padding-bottom: min(40svh, 300px);
+  }
+  /* the nav keeps its button whole: the stream readout is also in the footer */
+  .lp-nav .lp-readout {
+    display: none;
+  }
+  .lp-foot__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-10);
+  }
+}
+
+@media (max-width: 760px) {
+  .lp-foot {
+    padding-top: 56px;
+  }
+  .lp-foot__cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-8) var(--s-6);
+  }
+  .lp-foot__cols > :last-child {
+    grid-column: 1 / -1;
+  }
+  /* the nav drops the stream readout on a phone; the footer has room for it */
+  .lp-foot .lp-readout {
+    display: inline-flex;
+  }
+  .lp-foot__bar {
+    margin-top: 48px;
+  }
+}
+
+/* ---------- into the console and back: the network grows into the console's map ---------- */
+
+::view-transition-group(network) {
+  animation-duration: 700ms;
+  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+::view-transition-old(network),
+::view-transition-new(network) {
+  height: 100%;
+  animation-duration: 700ms;
+  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* ---------- the city at night (CityScene) ---------- */
+
+/* OpenStreetMap at night under the corridors: a still poster first, the live map fading in over it */
+.lp-city {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0e0e10;
+}
+
+.lp-city__map,
+.lp-city__traffic,
+.lp-city__poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lp-city__poster {
+  object-fit: cover;
+  transition: opacity 1.1s var(--ease-out);
+}
+
+.lp-city__map {
+  opacity: 0;
+  transition: opacity 1.1s var(--ease-out);
+}
+
+.lp-city.is-drawn .lp-city__map {
+  opacity: 1;
+}
+
+.lp-city.is-drawn .lp-city__poster {
+  opacity: 0;
+}
+
+/* the traffic's light adds to the city's, the way a long exposure stacks it */
+.lp-city__traffic {
+  pointer-events: none;
+  mix-blend-mode: screen;
+  transition: opacity 1.1s var(--ease-out);
+}
+
+/* with no city drawn (still loading, or its tiles never came) the poster shows alone */
+.lp-city:not(.is-drawn) .lp-city__traffic {
+  opacity: 0;
+}
+
+/* the poster on its own, while the map's code is still on its way */
+.lp-city__poster--alone {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* the hero's city runs to the page's edges and falls away into the page below it */
+.lp-hero .lp-viz {
+  display: block;
+  perspective: none;
+}
+
+/* the hero's night video: its still first, the clip fading in over it once it plays, and two copies of the
+   clip cross-fading at the seam so the loop never jumps */
+.lp-video {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--lp-bg);
+}
+
+.lp-video__poster,
+.lp-video__clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lp-video__clip {
+  opacity: 0;
+  transition: opacity 900ms var(--ease-in-out);
+}
+
+.lp-video.is-playing .lp-video__clip.is-front {
+  opacity: 1;
+}
+
+/* dark at the top under the nav, falling away into the page at the bottom, a little darker at the edges */
+.lp-hero .lp-video::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgb(10 10 11 / 0.55) 0%, rgb(10 10 11 / 0) 18%, rgb(10 10 11 / 0) 72%, var(--lp-bg) 100%),
+    radial-gradient(120% 90% at 70% 55%, transparent 55%, rgb(10 10 11 / 0.6) 100%);
+}
+
+/* where the camera is, in a control room's mono: the hero's one readout */
+.lp-hud {
+  position: absolute;
+  top: 92px;
+  /* on the right edge of the page's content */
+  right: calc((100% - min(100% - 2 * var(--lp-gut), 1200px)) / 2);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px 8px 12px;
+  border-radius: var(--r-pill);
+  background: rgb(10 10 11 / 0.5);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(10px);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.lp-hud__dot {
+  width: 6px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* the forecast's frame: a window onto the city at night */
+.lp-scrub__net {
+  position: relative;
+  aspect-ratio: 16 / 11;
+  overflow: hidden;
+  border-radius: var(--r-xl);
+  background: #0e0e10;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 40px 90px -40px rgb(0 0 0 / 0.9);
+}
+
+/* the forecast's city: the night still and the corridors drawn over it from the same camera */
+.lp-fmap__media,
+.lp-fmap__still,
+.lp-fmap__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* what the camera moves: it creeps in over the corridors as the minutes pass */
+.lp-fmap__media {
+  transform-origin: 50% 48%;
+  will-change: transform;
+}
+
+.lp-fmap__still {
+  object-fit: cover;
+}
+
+/* the city steps back so the corridors carry the colour; its edges fall into the frame's ground */
+.lp-fmap__media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% 48%, rgb(10 10 11 / 0) 40%, rgb(10 10 11 / 0.7) 100%),
+    rgb(10 10 11 / 0.28);
+}
+
+.lp-fmap__svg {
+  z-index: 1;
+  overflow: visible;
+}
+
+.lp-fmap__svg path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 600ms var(--ease-out);
+}
+
+/* the light a corridor throws on the street around it */
+.lp-fmap__glow {
+  mix-blend-mode: screen;
+}
+
+.lp-fmap__glow path {
+  stroke-width: 26;
+  opacity: 0;
+}
+
+.lp-fmap__svg.is-drawn .lp-fmap__glow path {
+  opacity: 0.3;
+  transition-delay: calc(var(--d) + 500ms);
+}
+
+.lp-fmap__core path {
+  stroke-width: 7;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+}
+
+.lp-fmap__core path.is-flagged {
+  stroke-width: 10;
+}
+
+/* the corridors draw themselves in, once, as the frame opens */
+.lp-fmap__svg.is-drawn .lp-fmap__core path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1200ms var(--ease-out) var(--d);
+}
+
+.lp-fmap__svg.is-waiting .lp-fmap__core path {
+  opacity: 0.7;
+}
+
+.lp-fmap__svg.is-waiting .lp-fmap__glow path {
+  opacity: 0;
+}
+
+/* the headlights: small and bright, lighter than the road under them */
+.lp-fmap__cars {
+  mix-blend-mode: screen;
+}
+
+/* the worst corridor: a ring on its road, and its name and speed beside it */
+.lp-fmap__pin {
+  fill: none;
+  stroke: rgb(237 237 238 / 0.85);
+  stroke-width: 2.5;
+}
+
+/* the tag sits where it covers the fewest other corridors (placed by the component) */
+.lp-fmap__tag {
+  --gap: 12px;
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--r-pill);
+  background: rgb(10 10 11 / 0.72);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  backdrop-filter: blur(8px);
+  color: var(--ink-1);
+  font-size: var(--t-12);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.lp-fmap__tag i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.lp-fmap__tag .num {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+}
+
+/* the key: the ramp the corridors are coloured on */
+.lp-fmap__key {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--r-pill);
+  background: rgb(10 10 11 / 0.62);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(10px);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.lp-fmap__key i {
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #22c55e 0%, #22c55e 14%, #fab219 40%, #ec835a 65%, #e5484d 90%);
+}
+
+.lp-fmap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-fmap__svg path,
+  .lp-fmap__svg.is-drawn .lp-fmap__core path {
+    transition: none;
+  }
+}
+
+.lp-scrub__map .lp-clock {
+  z-index: 3;
+  top: 14px;
+  right: 22px;
+  pointer-events: none;
+  text-shadow: 0 2px 24px rgb(0 0 0 / 0.8);
+}
+
+/* ---------- smaller screens ---------- */
+
+@media (max-width: 1023px) {
+  .lp-hero__veil {
+    background: linear-gradient(180deg, rgb(10 10 11 / 0.9) 0%, rgb(10 10 11 / 0.72) 42%, rgb(10 10 11 / 0) 60%);
+  }
+  .lp-scrub__grid,
+  .lp-faq,
+  .lp-head--split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-8);
+  }
+  .lp-head--split {
+    gap: var(--s-5);
+  }
+  .lp-panel {
+    width: min(360px, 44vw);
+  }
+  .lp-scrub__grid {
+    gap: var(--s-6);
+  }
+  .lp-steps {
+    margin-top: var(--s-5);
+  }
+  .lp-steps li {
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .lp {
+    --lp-gut: 20px;
+  }
+  .lp-nav__links {
+    display: none;
+  }
+  .lp-nav .lp-btn--sm {
+    margin-left: auto;
+  }
+  /* the hero says where the data comes from; on a phone the nav keeps to the brand and the action */
+  .lp-readout {
+    display: none;
+  }
+  /* the panel would cover the network the phone gives the lower half to */
+  .lp-hero__panel {
+    display: none;
+  }
+  .lp-hero {
+    align-items: flex-start;
+  }
+  .lp-hero__veil {
+    background: linear-gradient(180deg, rgb(10 10 11 / 0.94) 0%, rgb(10 10 11 / 0.8) 52%, rgb(10 10 11 / 0) 70%);
+  }
+  .lp-hero__content {
+    padding-top: 104px;
+    /* the city's corridors get the space under the words, and the hero still ends on the first screen */
+    padding-bottom: min(40svh, 300px);
+  }
+  .lp-section {
+    padding: 96px 0;
+  }
+  .lp-scrub {
+    height: 240vh;
+  }
+  .lp-scrub__text .lp-lede {
+    display: none;
+  }
+  .lp-fmap__tag {
+    --gap: 8px;
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .lp-hud {
+    display: none;
+  }
+  .lp-steps li:not(.is-on) .lp-steps__d {
+    display: none;
+  }
+  .lp-flow__svg {
+    display: none;
+  }
+  .lp-flow__list {
+    display: grid;
+    gap: 8px;
+  }
+  .lp-flow__list li {
+    display: grid;
+    gap: 2px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: #121214;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  }
+  .lp-flow__list li.is-condense {
+    background: #17171a;
+    box-shadow: inset 0 0 0 1px rgb(242 242 243 / 0.2);
+  }
+  .lp-flow__list-kind {
+    color: var(--ink-3);
+    font-size: var(--t-12);
+  }
+  .lp-flow__list-name {
+    font-family: var(--font-mono);
+    font-size: var(--t-14);
+  }
+  .lp-points,
+  .lp-shots,
+  .lp-peaks__facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-6);
+  }
+  .lp-peaks__stage.is-3d {
+    height: 340px;
+  }
+  .lp-cta {
+    padding: 24px 0 64px;
+  }
+  .lp-cta__card {
+    border-radius: 24px;
+  }
+}
+
+/* ---------- reduced motion: every picture, no movement ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-comet {
+    display: none;
+  }
+  .lp-rise {
+    animation: enter-fade 200ms ease both;
+  }
+  .lp-panel__row {
+    animation: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

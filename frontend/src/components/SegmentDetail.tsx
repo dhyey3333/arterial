@@ -3,14 +3,16 @@ import { Link } from 'react-router';
 import { useMemo } from 'react';
 import { useSegmentDetail } from '../data/queries';
 import { useLive } from '../data/store';
-import { INCIDENT_TYPE_LABEL, LEVEL_LABEL, TREND_LABEL, fmtInt, fmtOne, fmtPct, fmtShortTime, fmtSigned, fmtSpeed, fmtDistance } from '../lib/format';
+import { INCIDENT_TYPE_LABEL, LEVEL_LABEL, TREND_LABEL, fmtInt, fmtOne, fmtPct, fmtShortTime, fmtSigned, fmtSpeed, fmtDistance, fmtTime } from '../lib/format';
 import { LineChart, type Point } from './charts/charts';
-import { Empty, KeyValue, LevelBadge, Notice, SeverityBadge } from './ui/primitives';
+import { CopyId, Empty, KeyValue, LevelBadge, Notice, SeverityBadge } from './ui/primitives';
 
 export function TrendMark({ trend, slope }: { trend: 'improving' | 'stable' | 'worsening'; slope: number }) {
   return (
     <span className={`trend trend--${trend}`}>
-      <span aria-hidden="true">{trend === 'worsening' ? '↘' : trend === 'improving' ? '↗' : '→'}</span>
+      <span className="trend__arrow" aria-hidden="true">
+        {trend === 'worsening' ? '↘' : trend === 'improving' ? '↗' : '→'}
+      </span>
       {TREND_LABEL[trend]}
       <span className="num muted">{fmtSigned(slope, 1)} km/h/min</span>
     </span>
@@ -58,7 +60,9 @@ export function SegmentDetail({ id, onClose }: { id: string; onClose?: () => voi
     <div className="segdetail">
       <header className="segdetail__head">
         <div>
-          <p className="segdetail__eyebrow mono">{seg.id}</p>
+          <p className="segdetail__eyebrow">
+            <CopyId value={seg.id} label="segment id" />
+          </p>
           <h2 className="segdetail__title">{seg.name}</h2>
           <p className="segdetail__meta">
             {fmtDistance(seg.length_m)} · {seg.lanes} lanes · limit {seg.speed_limit_kph} km/h · free flow {ff} km/h
@@ -203,7 +207,7 @@ export function SegmentDetail({ id, onClose }: { id: string; onClose?: () => voi
       {state && (
         <KeyValue
           items={[
-            { k: 'Window', v: <span className="num">{fmtShortTime(state.window_start)}–{fmtShortTime(state.window_end)}</span> },
+            { k: 'Window', v: <span className="num">{fmtTime(state.window_start)}–{fmtTime(state.window_end)}</span> },
             { k: 'Vehicles in window', v: <span className="num">{fmtInt(state.vehicle_count)}</span> },
             { k: 'Severity score', v: <span className="num">{fmtInt(state.severity)} / 100</span> },
             { k: 'Level', v: LEVEL_LABEL[state.level] },

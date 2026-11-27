@@ -5,6 +5,7 @@
  * banner whenever this source is active.
  */
 import { ApiError, type DataSource, type StreamHandlers } from '../lib/api';
+import { searchPlaces } from './places';
 import type { Incident, SegmentState, SegmentDetail, StreamEventMap, StreamEventType } from '../lib/contract';
 import {
   MODEL,
@@ -89,6 +90,7 @@ export function createFixtureSource(): DataSource {
     }
     if (p === '/predictions') return scenePredictions(scene, nextScene(), windowEnd);
     if (p === '/predictions/model') return MODEL;
+    if (p === '/places') return searchPlaces(network, url.searchParams.get('q') ?? '', Number(url.searchParams.get('limit') ?? 8));
     if (p === '/analytics/overview') return analytics(Number(url.searchParams.get('days') ?? 7), now);
     if (p === '/system/status') return systemStatus(now, rand, vehicles[0] ?? null);
     if (p === '/system/throughput') return { points: throughputHistory(now, rand) };
@@ -116,7 +118,7 @@ export function createFixtureSource(): DataSource {
           const { origin, destination } = body as { origin: string; destination: string };
           if (origin === destination) throw new ApiError(400, 'same_origin_destination', 'Pick two different junctions.');
           const r = fixtureRoute(origin, destination, stateMap(), new Date());
-          if (!r) throw new ApiError(409, 'no_route', 'The design fixtures only hold one route: Silk Board Junction to Bellandur. The real engine routes any pair.');
+          if (!r) throw new ApiError(409, 'no_route', 'The design fixtures hold one sample route, Silk Board Junction to Bellandur. Routing between any two places arrives with the route engine in the build window.');
           return r as T;
         }
         throw new ApiError(404, 'not_found', `The design fixtures have nothing at ${path}.`);
