@@ -1,0 +1,10 @@
+.git
+.venv
+frontend
+site
+docs
+data/raw
+.env
+.env.*
+**/__pycache__
+data/networks/*.json

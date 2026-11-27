@@ -1,0 +1,19 @@
+# Every threshold the pipeline uses (docs/ARCHITECTURE.md, section 4). The reason strings quote them.
+window_s: 30
+allowed_lateness_s: 10
+min_speed_kph: 2            # a stopped vehicle counts at this speed in the harmonic mean
+k_jam_pcu_per_km_lane: 120
+levels:                     # speed ratio r = v / v_ff
+  free: 0.75                # r >= 0.75
+  moderate: 0.50            # 0.50 <= r < 0.75
+  heavy: 0.30               # 0.30 <= r < 0.50, or k >= heavy_density_share x k_jam
+heavy_density_share: 0.6
+low_sample_vehicles: 3      # fewer keeps the previous level
+deescalate_windows: 2       # windows in a row below a level before it drops
+trend_windows: 6
+trend_kph_per_min: 1.0
+validation:
+  max_future_s: 120
+  bbox_margin_m: 1000
+  max_speed_kph: 160
+  duplicate_ttl_s: 600
