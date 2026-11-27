@@ -22,8 +22,15 @@ from datetime import datetime, timedelta, timezone
 from pipeline.common import CONFIG, PIPELINE_VERSION, iso, load_networks, now_iso, parse_ts, topic
 
 HORIZONS = (5, 10, 15)
-PHI = {5: 0.9, 10: 0.75, 15: 0.6}        # how much of the current trend carries on, per horizon
+# How much of the current trend carries on, per horizon: fully while a build-up is under way (speed
+# clearly falling or density rising on the feeding roads), barely on a steady road, where following
+# the noise of a few windows only adds error.
+PHI_BUILD = {5: 0.9, 10: 0.55, 15: 0.35}
+PHI_STEADY = {5: 0.15, 10: 0.08, 15: 0.04}
+BUILD_SLOPE = 0.8                        # km/h per minute falling, or
+BUILD_RISE = 2.0                         # veh/km more on the feeding roads: a build-up
 BETA = 0.08                              # km/h lost per veh/km of density rise upstream
+BASE_WINDOWS = 4                         # the starting speed: these windows, weighted by vehicles
 FALLBACK_HALF = {5: 4.0, 10: 6.0, 15: 8.0}
 MIN_RESIDUALS = 40
 MIN_TREND_WINDOWS = 4                    # fewer and the trend is noise: hold the speed instead
@@ -43,7 +50,9 @@ def quantile(xs: list[float], q: float) -> float:
 
 
 class Forecaster:
-    def __init__(self, networks: dict | None = None):
+    def __init__(self, networks: dict | None = None, **params):
+        self.p = {"phi_build": PHI_BUILD, "phi_steady": PHI_STEADY, "build_slope": BUILD_SLOPE, "build_rise": BUILD_RISE,
+                  "beta": BETA, "base_windows": BASE_WINDOWS} | params
         self.networks = networks if networks is not None else load_networks()
         self.upstream: dict[str, list[str]] = {}
         for net in self.networks.values():
@@ -62,9 +71,12 @@ class Forecaster:
                     self.upstream[sid] = sorted(feeders)
         self.speeds: dict[str, deque] = defaultdict(lambda: deque(maxlen=6))
         self.density: dict[str, deque] = defaultdict(lambda: deque(maxlen=3))
+        self.recent: dict[str, deque] = defaultdict(lambda: deque(maxlen=self.p["base_windows"]))  # (speed, vehicles)
         self.pending: dict[tuple[str, int], deque] = defaultdict(deque)  # (segment, horizon) -> (target_end, predicted, persistence)
         self.residuals = {h: deque(maxlen=3000) for h in HORIZONS}
         self.persist = {h: deque(maxlen=3000) for h in HORIZONS}
+        self.scored = {h: 0 for h in HORIZONS}
+        self._q: dict[int, tuple[float, float, int]] = {}
         self.out = topic("predictions")
         self.started = now_iso()
         self.last_model_at: datetime | None = None
@@ -77,12 +89,20 @@ class Forecaster:
                 target, pred, base = q.popleft()
                 if end - target <= timedelta(seconds=WINDOW_S):
                     self.residuals[h].append(v - pred)
+                    self.scored[h] += 1
                     self.persist[h].append(v - base)
 
     def _interval(self, h: int, pred: float) -> tuple[float, float, bool]:
         r = self.residuals[h]
         if len(r) >= MIN_RESIDUALS:
-            return pred + quantile(list(r), 0.1), pred + quantile(list(r), 0.9), True
+            # the 10th and 90th percentiles of the live errors, recomputed every 100 new errors (sorting
+            # thousands of values for every forecast was most of this stage's CPU)
+            cached = self._q.get(h)
+            if not cached or abs(self.scored[h] - cached[2]) >= 100:
+                xs = list(r)
+                cached = (quantile(xs, 0.1), quantile(xs, 0.9), self.scored[h])
+                self._q[h] = cached
+            return pred + cached[0], pred + cached[1], True
         return pred - FALLBACK_HALF[h], pred + FALLBACK_HALF[h], False
 
     def process(self, key, value: str, now: datetime | None = None):
@@ -101,6 +121,10 @@ class Forecaster:
         if not m.get("low_sample"):
             self.speeds[sid].append(v)
         self.density[sid].append(float(m["density_veh_per_km"]))
+        self.recent[sid].append((v, max(1, int(m.get("vehicle_count") or 1))))
+        # the starting speed: the last few windows pooled by their vehicles, steadier than one window
+        weight = sum(c for _, c in self.recent[sid])
+        base = sum(x * c for x, c in self.recent[sid]) / weight
 
         speeds = list(self.speeds[sid])
         n = len(speeds)
@@ -118,10 +142,12 @@ class Forecaster:
                 rises.append(d[-1] - d[0])
         rise = max(0.0, sum(rises) / len(rises)) if rises else 0.0
 
+        building = slope <= -self.p["build_slope"] or rise >= self.p["build_rise"]
+        phi = self.p["phi_build"] if building else self.p["phi_steady"]
         outs = []
         made_at = now_iso()
         for h in HORIZONS:
-            pred = v + PHI[h] * slope * h - BETA * rise
+            pred = base + phi[h] * slope * h - self.p["beta"] * rise
             pred = max(2.0, min(vff, pred))
             lo, hi, calibrated = self._interval(h, pred)
             lo, hi = max(0.0, lo), min(vff * 1.1, hi)
@@ -178,7 +204,8 @@ class Forecaster:
             "version": PIPELINE_VERSION,
             "region": ",".join(sorted(self.networks)),
             "kind": "rule_baseline",
-            "description": "Damped trend of the last windows minus upstream density pressure, clipped to free flow. "
+            "description": "Vehicle-weighted speed of the last windows plus its trend (followed fully only during a build-up) "
+                           "minus upstream density pressure, clipped to free flow. "
                            "Errors are measured live against each forecast's target window, beside persistence.",
             "trained_at": None,
             "training_windows": 0,
