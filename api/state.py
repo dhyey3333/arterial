@@ -295,10 +295,14 @@ class State:
         return {"p50": pct(0.5), "p95": pct(0.95), "max": round(xs[-1])}
 
     def stage_status(self, rate: Rate) -> str:
+        """ok while events keep arriving. Window-based topics arrive in a burst every 30 s, so they are
+        given a 45 s allowance before they count as late, and 120 s before they count as down."""
         if rate.last_at is None:
             return "unknown"
         age = time.time() - rate.last_at
-        return "ok" if age < 15 else "degraded" if age < 60 else "down"
+        windowed = rate is self.rates["metrics"] or rate is self.rates["predictions"] or rate is self.rates["alerts"]
+        ok, down = (45, 120) if windowed else (15, 60)
+        return "ok" if age < ok else "degraded" if age < down else "down"
 
     def system(self) -> dict:
         r = self.rates
