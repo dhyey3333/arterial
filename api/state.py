@@ -194,6 +194,9 @@ class State:
 
     def on_alert(self, a: dict) -> None:
         self.rates["alerts"].add()
+        # like metrics and predictions: only this region's roads, so every alert in the console opens its segment
+        if a.get("region") != self.region_id or a.get("segment_id") not in self.segments:
+            return
         with self.lock:
             self.alerts.appendleft(a)
         self.emit("alert", a)
