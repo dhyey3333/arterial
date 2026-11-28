@@ -44,6 +44,7 @@ test the interface before any backend exists. It is never used in the demo and t
 | Tool | Used for | How the output was checked |
 |---|---|---|
 | Claude Code (Anthropic) | Before the window: the frontend, the docs and the fixture road shapes. In the window: the road-network builder, the simulator, the Condense transforms, the API, the landing's live wiring, and operating the Condense console in a browser (creating the application and its variables, publishing versions, deploying the transforms) | TypeScript compile; unit tests (Vitest, pytest); runs against the team's Kafka topics with `pipeline.peek`; review in a real browser |
+| Microsoft Edge text-to-speech (edge-tts, voice en-US-AndrewMultilingualNeural) | The demo video's voice-over, reading the team's own script; the video itself is a screen recording of Arterial and the team's Condense pipeline, with on-screen captions | Listened to; every line matches a caption on screen |
 
 The team is responsible for everything submitted. The team gave Claude Code the team's Kafka
 username and password so it could write them into the git-ignored `.env` and test the connection;
