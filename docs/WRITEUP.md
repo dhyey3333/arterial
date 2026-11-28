@@ -48,7 +48,7 @@ compared with the usual route) and the pipeline's own health. The landing page p
 its mean absolute error beats persistence ("the speed stays as it is") at every horizon: 3.19 against
 3.32 km/h at 5 minutes, 3.99 against 4.20 at 10, 4.01 against 4.28 at 15. The first version lost to
 persistence at all three; pooling the last windows by their vehicles and following the trend fully only
-during a build-up fixed that. The live figures are on the console's Forecast page.
+during a build-up fixed that. Live it does worse: on 28 November it trailed persistence at every horizon (5.98 against 4.63 km/h at 5 minutes), so the replay gain does not yet hold on live traffic. The live figures are on the console's Forecast page.
 
 **What it looks like working:** with the Silk Board build-up started, the forecast moved Outer Ring
 Road to "moderate, 26 km/h in 15 minutes" while it still read free at 34 km/h. The reason it gave was
@@ -99,7 +99,7 @@ density rising on two roads feeding it.
   none is used.
 - The simulator and the API run on a laptop; only the four stages run on Condense.
 - Incident detection is not built.
-- The forecast is a rule baseline that beats persistence by 4 to 6%; no trained model has replaced it yet.
+- The forecast is a rule baseline: it beat persistence by 4 to 6% on the replay but trails it live; no trained model has replaced it yet.
 - The API keeps its state in memory and rebuilds it from Kafka on start; there is no database.
 - On the national tier, 1,500 vehicles over 368,587 km leave most segments without a recent window.
 
