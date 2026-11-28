@@ -1949,3 +1949,41 @@
     height: 360px;
   }
 }
+
+/* turn-by-turn directions under the recommended route */
+.rt-steps {
+  border: 1px solid var(--line, rgb(237 237 238 / 0.08));
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.rt-steps summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--ink-1, #ededee);
+}
+.rt-steps ol {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.rt-steps li {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  color: var(--ink-2, #b5b5b9);
+  font-size: 14px;
+  line-height: 1.35;
+}
+.rt-steps li svg {
+  margin-top: 2px;
+  color: var(--ink-1, #ededee);
+}
+.rt-steps__dist {
+  color: var(--ink-3, #8a8a90);
+  white-space: nowrap;
+}

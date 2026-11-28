@@ -200,14 +200,14 @@ function addLayers(map: MLMap, net: RoadNetwork) {
     type: 'line',
     source: 'route-a',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#0b0b0b', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 7, 16, 14] },
+    paint: { 'line-color': '#0b0b0b', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 6, 11, 9, 16, 14] },
   }, under);
   map.addLayer({
     id: 'route-a-line',
     type: 'line',
     source: 'route-a',
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#f2f2f3', 'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 16, 8] },
+    paint: { 'line-color': '#f2f2f3', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 11, 5, 16, 8] },
   }, under);
 
   // the route race: a light and a short streak for each route, dark ringed in white on the off-white
@@ -264,10 +264,20 @@ function addLayers(map: MLMap, net: RoadNetwork) {
       features: net.nodes.map((n) => ({ type: 'Feature', properties: { id: n.id, name: n.name }, geometry: { type: 'Point', coordinates: [n.lng, n.lat] } })),
     },
   });
+  // the picked start and end, visible at any zoom (the junction dots appear only from city zoom on a country)
+  map.addSource('ends', { type: 'geojson', data: emptyFC });
+  map.addLayer({
+    id: 'ends',
+    type: 'circle',
+    source: 'ends',
+    paint: { 'circle-radius': 7, 'circle-color': '#f2f2f3', 'circle-stroke-color': '#0a0a0b', 'circle-stroke-width': 2.5 },
+  });
   map.addLayer({
     id: 'nodes',
     type: 'circle',
     source: 'nodes',
+    // 152,588 junctions across India drawn at once stall the map: they appear once zoomed to a city
+    minzoom: net.region.kind === 'national' ? 13 : 0,
     layout: { visibility: 'none' },
     paint: {
       'circle-radius': ['case', ['any', ['boolean', ['feature-state', 'origin'], false], ['boolean', ['feature-state', 'destination'], false]], 8, ['boolean', ['feature-state', 'hover'], false], 7, 5],
@@ -317,6 +327,7 @@ export function TrafficMap({
   const cb = useRef({ onSelectSegment, nodes });
   cb.current = { onSelectSegment, nodes };
   const paddingRef = useRef(padding);
+  const fittedRoute = useRef<LngLat[] | null>(null);
   paddingRef.current = padding;
 
   // ---- create the map once per network ----
@@ -647,6 +658,15 @@ export function TrafficMap({
       features: coords.length > 1 ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } }] : [],
     });
     b.setData(line(route?.compare ?? []));
+    if (route && route.primary.length > 1 && fittedRoute.current !== route.primary) {
+      fittedRoute.current = route.primary;
+      const all = [...route.primary, ...(route.compare ?? [])];
+      let w = Infinity, s2 = Infinity, e = -Infinity, n = -Infinity;
+      for (const [x, y] of all) {
+        w = Math.min(w, x); e = Math.max(e, x); s2 = Math.min(s2, y); n = Math.max(n, y);
+      }
+      map.fitBounds([[w, s2], [e, n]], { padding: fitPadding(map.getContainer(), paddingRef.current), duration: reduce ? 0 : 700, maxZoom: 15 });
+    }
     if (!route) {
       a.setData(emptyFC);
       return;
@@ -701,14 +721,28 @@ export function TrafficMap({
   }, [route, ready, reduce]);
 
   // ---- junction picking (routes page) ----
+  // only the two picked junctions change state: the props object is new on every render, so the effect
+  // keys on the ids, and the previous pair is cleared rather than every junction being rewritten
+  const pickedRef = useRef<{ origin: string | null; destination: string | null }>({ origin: null, destination: null });
+  const showNodes = !!nodes;
+  const originId = nodes?.origin ?? null;
+  const destinationId = nodes?.destination ?? null;
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map || !network) return;
-    map.setLayoutProperty('nodes', 'visibility', nodes ? 'visible' : 'none');
-    for (const n of network.nodes) {
-      map.setFeatureState({ source: 'nodes', id: n.id }, { origin: nodes?.origin === n.id, destination: nodes?.destination === n.id });
+    map.setLayoutProperty('nodes', 'visibility', showNodes ? 'visible' : 'none');
+    const endsSrc = map.getSource('ends') as GeoJSONSource | undefined;
+    if (endsSrc && network) {
+      const byId = new Map(network.nodes.map((n) => [n.id, n]));
+      const picked = [originId, destinationId].map((id) => (id ? byId.get(id) : undefined)).filter(Boolean) as RoadNode[];
+      endsSrc.setData({ type: 'FeatureCollection', features: picked.map((n) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [n.lng, n.lat] } })) });
     }
-  }, [nodes, ready, network]);
+    const prev = pickedRef.current;
+    for (const id of [prev.origin, prev.destination]) if (id) map.setFeatureState({ source: 'nodes', id }, { origin: false, destination: false });
+    if (originId) map.setFeatureState({ source: 'nodes', id: originId }, { origin: true });
+    if (destinationId) map.setFeatureState({ source: 'nodes', id: destinationId }, { destination: true });
+    pickedRef.current = { origin: originId, destination: destinationId };
+  }, [showNodes, originId, destinationId, ready, network]);
 
   // ---- focus ----
   const focusKey = focus?.join('|') ?? '';

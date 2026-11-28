@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { ArrowUpDown, RotateCcw, Unplug } from 'lucide-react';
+import { ArrowUp, ArrowUpDown, ArrowUpLeft, ArrowUpRight, CornerUpLeft, CornerUpRight, Flag, Navigation, RotateCcw, Unplug, type LucideIcon } from 'lucide-react';
 import { LevelBar } from '../components/charts/charts';
 import { TrafficMap, type MapRoute } from '../components/map/TrafficMap';
 import { PlaceField } from '../components/ui/PlaceField';
@@ -9,7 +9,7 @@ import { useSource } from '../data/LiveProvider';
 import { useRoute } from '../data/queries';
 import { useLive } from '../data/store';
 import { ApiError } from '../lib/api';
-import type { RoadNode, RouteOption, SegmentLevel } from '../lib/contract';
+import type { RoadNetwork, RoadNode, RouteOption, SegmentLevel } from '../lib/contract';
 import { fmtDistance, fmtDuration, fmtTime } from '../lib/format';
 
 function kmByLevel(o: RouteOption): Record<SegmentLevel, number> {
@@ -46,6 +46,80 @@ function Option({ title, option, tone, note }: { title: string; option: RouteOpt
   );
 }
 
+interface Step {
+  icon: LucideIcon;
+  text: string;
+  distanceM: number;
+}
+
+const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+
+function bearing(a: RoadNode, b: RoadNode): number {
+  const p1 = (a.lat * Math.PI) / 180;
+  const p2 = (b.lat * Math.PI) / 180;
+  const dl = ((b.lng - a.lng) * Math.PI) / 180;
+  const y = Math.sin(dl) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+/**
+ * Turn-by-turn steps for a route, from its segments: consecutive segments of one road are one step, and
+ * the turn onto the next road comes from the change in heading at the junction between them.
+ */
+function directions(option: RouteOption, network: RoadNetwork, segName: (id: string) => string, destination: string): Step[] {
+  const nodes = new Map(network.nodes.map((n) => [n.id, n]));
+  const segLen = new Map(network.segments.map((s) => [s.id, s.length_m]));
+  const legs = option.segment_ids.map((sid, i) => {
+    const a = nodes.get(option.node_ids[i]);
+    const b = nodes.get(option.node_ids[i + 1]);
+    const raw = segName(sid);
+    return { road: raw.startsWith('Unnamed') ? 'the unnamed road' : raw, len: segLen.get(sid) ?? 0, heading: a && b ? bearing(a, b) : null };
+  });
+  const steps: Step[] = [];
+  let i = 0;
+  while (i < legs.length) {
+    let j = i;
+    let len = 0;
+    while (j < legs.length && legs[j].road === legs[i].road) len += legs[j++].len;
+    const before = i > 0 ? legs[i - 1].heading : null;
+    const after = legs[i].heading;
+    let icon: LucideIcon = ArrowUp;
+    let verb = 'Continue onto';
+    if (i === 0) {
+      icon = Navigation;
+      verb = after != null ? `Head ${COMPASS[Math.round(after / 45) % 8]} on` : 'Start on';
+    } else if (before != null && after != null) {
+      const d = ((after - before + 540) % 360) - 180;
+      if (d > 60) [icon, verb] = [CornerUpRight, 'Turn right onto'];
+      else if (d > 25) [icon, verb] = [ArrowUpRight, 'Bear right onto'];
+      else if (d < -60) [icon, verb] = [CornerUpLeft, 'Turn left onto'];
+      else if (d < -25) [icon, verb] = [ArrowUpLeft, 'Bear left onto'];
+    }
+    steps.push({ icon, text: `${verb} ${legs[i].road}`, distanceM: len });
+    i = j;
+  }
+  steps.push({ icon: Flag, text: `Arrive at ${destination}`, distanceM: 0 });
+  return steps;
+}
+
+function Directions({ steps }: { steps: Step[] }) {
+  return (
+    <details className="rt-steps" open>
+      <summary>Directions · {steps.length - 1} steps</summary>
+      <ol>
+        {steps.map((s, k) => (
+          <li key={k}>
+            <s.icon size={15} aria-hidden="true" />
+            <span className="rt-steps__text">{s.text}</span>
+            {s.distanceM > 0 && <span className="rt-steps__dist num">{fmtDistance(s.distanceM)}</span>}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
 export default function Routes() {
   const network = useLive((s) => s.network);
   const source = useSource();
@@ -56,6 +130,11 @@ export default function Routes() {
   const narrow = useMediaQuery('(max-width: 900px)');
   const names = useMemo(() => new Map((network?.nodes ?? []).map((n) => [n.id, n.name])), [network]);
   const res = route.data;
+  const segIndex = useLive((s) => s.segIndex);
+  const steps = useMemo(
+    () => (res && network ? directions(res.recommended, network, (id) => segIndex[id]?.name ?? id, names.get(res.destination) ?? 'your destination') : null),
+    [res, network, segIndex, names],
+  );
   const reduce = useReducedMotion();
   // bumping this plays the race again
   const [run, setRun] = useState(0);
@@ -182,6 +261,7 @@ export default function Routes() {
                 )}
               </div>
               <Option title="Recommended now" option={res.recommended} tone="primary" />
+              {steps && <Directions steps={steps} />}
               {!same && <Option title="Usual fastest route" option={res.free_flow_fastest} tone="compare" note="Fastest when roads run at free flow, timed at current speeds." />}
               {res.alternative && same && <Option title="Alternative" option={res.alternative} tone="alt" />}
               <ul className="drivers">
